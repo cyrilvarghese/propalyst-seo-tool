@@ -293,6 +293,7 @@ export class ClaudeSearchService {
                 location: analysis.location,
                 community: analysis.community,
                 market: analysis.market,
+                narratives: analysis.narratives || {},
                 confidenceScore: analysis.confidenceScore,
                 analysisDepth: depth,
                 sourceUrl: searchResult.url,

@@ -335,6 +335,7 @@ async function mergePropertyAnalyses(
             nearbyAmenities: mergeArrays(...analyses.map(a => a.location.nearbyAmenities)),
             educationalInstitutions: mergeArrays(...analyses.map(a => a.location.educationalInstitutions)),
             healthcareFacilities: mergeArrays(...analyses.map(a => a.location.healthcareFacilities)),
+            shoppingCenters: mergeArrays(...analyses.map(a => a.location.shoppingCenters)),
             workProximity: {
                 businessHubs: mergeArrays(...analyses.map(a => a.location.workProximity.businessHubs)),
                 techParks: mergeArrays(...analyses.map(a => a.location.workProximity.techParks)),

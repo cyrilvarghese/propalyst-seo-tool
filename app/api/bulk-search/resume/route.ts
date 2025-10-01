@@ -1,18 +1,5 @@
 import { NextRequest } from 'next/server'
-
-/**
- * In-memory map to store cooldown resolvers
- *
- * Key: requestId (unique identifier for each cooldown)
- * Value: resolve function that wakes up the waiting server
- *
- * **Next.js SSR Teaching Point:**
- * This Map lives in Node.js server memory, NOT in the browser.
- * Multiple API routes in the same process can share this Map.
- * When client calls this endpoint, we can trigger the resolver
- * stored by the bulk-search route.
- */
-export const pendingCooldowns = new Map<string, () => void>()
+import { pendingCooldowns } from '@/lib/utils/cooldown-manager'
 
 /**
  * Resume endpoint - Called by client to wake up cooldown

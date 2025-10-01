@@ -202,6 +202,7 @@ export class HybridSearchService {
                 location: normalized.location,
                 community: normalized.community,
                 market: normalized.market,
+                narratives: normalized.narratives || {},
                 confidenceScore: normalized.confidenceScore,
                 analysisDepth: depth,
                 sourceUrl: searchResult.url,

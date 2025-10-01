@@ -45,6 +45,7 @@ export default function PropertyDetailPage() {
                 market: dbProperty.market || {},
                 narratives: dbProperty.narratives || {},
                 confidenceScore: dbProperty.confidence_score || 0,
+                analysisDepth: 'detailed',
                 sourceUrl: dbProperty.source_url,
                 sourceName: dbProperty.source_name,
                 lastAnalyzed: dbProperty.last_analyzed,

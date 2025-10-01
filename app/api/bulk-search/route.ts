@@ -3,7 +3,7 @@ import { getPropertyStorage } from '@/lib/services/property-storage-service'
 import { IntelligentPropertyResult } from '@/lib/types/property-intelligence'
 import { supabase } from '@/lib/utils/supabase-client'
 import { POST as searchHandler } from '../search/route'
-import { pendingCooldowns } from './resume/route'
+import { pendingCooldowns } from '@/lib/utils/cooldown-manager'
 
 /**
  * Parse uploaded file to array of property names
@@ -55,6 +55,7 @@ function transformDbToProperty(dbRecord: any): IntelligentPropertyResult {
         market: dbRecord.market || {},
         narratives: dbRecord.narratives || {},
         confidenceScore: dbRecord.confidence_score || 0,
+        analysisDepth: 'detailed', // Default depth for stored properties
         sourceUrl: dbRecord.source_url,
         sourceName: dbRecord.source_name,
         lastAnalyzed: dbRecord.last_analyzed,
