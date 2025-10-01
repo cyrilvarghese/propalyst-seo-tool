@@ -23,7 +23,7 @@ At least **one AI provider** is required:
 - **Google AI API Key** (for Gemini with Google Search) - Free tier available
 
 Optional but recommended:
-- **SerpAPI Key** - Property images (100 free/month)
+- **SerpAPI Key** - Property images (250 free/month)
 - **Supabase Account** - PostgreSQL database (500MB free)
 
 ## ⚙️ Environment Setup
@@ -293,34 +293,4 @@ npm i -g vercel
 vercel
 ```
 
-Add environment variables in Vercel dashboard.
-
-## 📝 Sample Properties
-
-Try searching for:
-- Embassy Lake Terraces
-- Brigade Gateway
-- Sobha Indraprastha
-- Prestige Shantiniketan
-- Salarpuria Sattva Luxuria
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## 📄 License
-
-MIT License - feel free to use this project for learning or commercial purposes.
-
-## 🙏 Acknowledgments
-
-- [Next.js](https://nextjs.org) - React framework
-- [shadcn/ui](https://ui.shadcn.com) - UI components
-- [Anthropic Claude](https://www.anthropic.com) - AI analysis
-- [Google Gemini](https://ai.google.dev) - AI with search grounding
-- [SerpAPI](https://serpapi.com) - Property images
-- [Supabase](https://supabase.com) - PostgreSQL database
+ 
