@@ -5,7 +5,7 @@ export async function GET() {
 
     try {
         const { data, error, count } = await supabase
-            .from('society_new')
+            .from('society')
             .select('*', { count: 'exact' })
             .order('created_at', { ascending: false })
 

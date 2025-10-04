@@ -128,7 +128,7 @@ data/
    - Extract structured data + 9 narratives
 4. Save to:
    - Filesystem: data/properties/[slug].json
-   - Supabase: society_new table (upsert)
+   - Supabase: society table (upsert)
 5. Stream results to client
 6. Display: Hero + Images + Amenities + Narratives
 ```
@@ -200,7 +200,7 @@ npx shadcn@latest add <component-name>
 
 ## 🗄️ Database Schema
 
-**Table**: `society_new` (Supabase PostgreSQL)
+**Table**: `society` (Supabase PostgreSQL)
 
 ```sql
 - id (TEXT, PRIMARY KEY)

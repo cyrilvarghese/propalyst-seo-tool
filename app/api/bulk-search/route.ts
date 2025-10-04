@@ -113,7 +113,7 @@ async function performPropertySearch(
         // Fallback: fetch from Supabase
         console.log(`[Bulk Search] Property not in filesystem, fetching from Supabase: ${slug}`)
         const { data, error } = await supabase
-            .from('society_new')
+            .from('society')
             .select('*')
             .eq('slug', slug)
             .single()
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
                         console.log(`[Bulk Search:${requestId}] 📥 Fetching saved property from Supabase...`)
                         const slug = storage.generateSlug(society)
                         const { data: savedProperty, error: fetchError } = await supabase
-                            .from('society_new')
+                            .from('society')
                             .select('*')
                             .eq('slug', slug)
                             .single()

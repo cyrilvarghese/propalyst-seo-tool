@@ -101,7 +101,7 @@ Fetch Images: SerpAPI → 8 photos (interior + exterior)
   ↓
 Save to:
   1. Filesystem: data/properties/[slug].json
-  2. Supabase: society_new table (upsert by slug)
+  2. Supabase: society table (upsert by slug)
   ↓
 Stream response to client
   ↓
@@ -132,7 +132,7 @@ Show summary
 - **Used for**: Cache hits, instant results
 
 ### Supabase (Persistent Database)
-- **Table**: `society_new`
+- **Table**: `society`
 - **Key fields**: id, name, slug (unique), specifications, location, community, market, narratives
 - **JSONB columns**: specifications, location, community, market, narratives, property_images, source_citations
 - **Sync method**: `upsert()` by slug (prevents duplicates)
@@ -206,7 +206,7 @@ Show summary
 ### Bulk Search Debugging
 - Currently in DEBUG MODE: just saves to Supabase
 - Check server logs for `/api/search` calls
-- Verify Supabase `society_new` table for new rows
+- Verify Supabase `society` table for new rows
 - Next step: Add back property fetching + UI display
 
 ### Search Not Working

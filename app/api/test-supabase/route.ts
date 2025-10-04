@@ -1,12 +1,12 @@
 import { supabase } from '@/lib/utils/supabase-client'
 
 export async function GET() {
-    console.log('[Test API] 🧪 Testing Supabase INSERT into society_new table...')
+    console.log('[Test API] 🧪 Testing Supabase INSERT into society table...')
 
     try {
         // Step 1: Get count BEFORE insert
         const { count: countBefore, error: countBeforeError } = await supabase
-            .from('society_new')
+            .from('society')
             .select('*', { count: 'exact', head: true })
 
         if (countBeforeError) {
@@ -36,7 +36,7 @@ export async function GET() {
         }
 
         const { data: insertedData, error: insertError } = await supabase
-            .from('society_new')
+            .from('society')
             .insert(testRow)
             .select()
 
@@ -53,7 +53,7 @@ export async function GET() {
 
         // Step 3: Get count AFTER insert
         const { count: countAfter, error: countAfterError } = await supabase
-            .from('society_new')
+            .from('society')
             .select('*', { count: 'exact', head: true })
 
         if (countAfterError) {

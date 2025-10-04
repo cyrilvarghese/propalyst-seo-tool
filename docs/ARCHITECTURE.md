@@ -308,7 +308,7 @@ data/
 ```
 
 **Supabase Database**:
-- Table: `society_new`
+- Table: `society`
 - JSONB columns for nested data
 - Indexed for efficient querying
 - See [STORAGE.md](./STORAGE.md) for schema details

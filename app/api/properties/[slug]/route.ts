@@ -10,7 +10,7 @@ export async function GET(
 
     try {
         const { data, error } = await supabase
-            .from('society_new')
+            .from('society')
             .select('*')
             .eq('slug', slug)
             .single()

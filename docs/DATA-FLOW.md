@@ -192,7 +192,7 @@ This project uses **both** filesystem and database storage simultaneously for di
 ### Quick Summary:
 1. **Generate unique slug** from property name
 2. **Save to filesystem** (`data/properties/[slug].json`)
-3. **Sync to Supabase** (`society_new` table with JSONB columns)
+3. **Sync to Supabase** (`society` table with JSONB columns)
 4. **Return slug** for client reference
 
 **Key transformations**:
@@ -534,7 +534,7 @@ USER INPUT
       ├─ Transform: title → name
       ├─ JSONB: specifications, location, community, market, narratives
       ├─ Arrays: property_images, source_citations
-      └─ supabase.from('society_new').upsert() ✅
+      └─ supabase.from('society').upsert() ✅
    ↓
 [Stream Response] → ReadableStream → Client
    ↓
@@ -553,7 +553,7 @@ DISPLAY:
 
 STORED IN TWO PLACES:
 1. 💾 Filesystem: data/properties/embassy-lake-terraces.json
-2. 🗄️ Supabase: society_new table (row with slug='embassy-lake-terraces')
+2. 🗄️ Supabase: society table (row with slug='embassy-lake-terraces')
 ```
 
 ---

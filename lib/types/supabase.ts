@@ -22,7 +22,7 @@ export type SocietyNew = {
 export type Database = {
     public: {
         Tables: {
-            society_new: {
+            society: {
                 Row: SocietyNew
                 Insert: SocietyNew
                 Update: Partial<SocietyNew>

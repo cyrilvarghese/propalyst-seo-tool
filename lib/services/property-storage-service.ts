@@ -52,7 +52,7 @@ export class PropertyStorageService {
     /**
      * Sync property to Supabase database
      *
-     * Transforms property object to match society_new table schema
+     * Transforms property object to match society table schema
      * Uses upsert to prevent duplicates (insert if new, update if exists)
      */
     private async syncToSupabase(property: IntelligentPropertyResult, slug: string): Promise<void> {
@@ -90,13 +90,13 @@ export class PropertyStorageService {
                 slug: slug
             }
 
-            console.log(`[Storage] 📤 Upserting to Supabase table: society_new`)
+            console.log(`[Storage] 📤 Upserting to Supabase table: society`)
             console.log(`[Storage] 📝 Property Name: ${dbRecord.name}, Slug: ${dbRecord.slug}`)
             console.log(`[Storage] 🔢 Record size: ${JSON.stringify(dbRecord).length} characters`)
 
             // Upsert: Insert if new, update if exists (by slug)
             const { data, error } = await supabase
-                .from('society_new')
+                .from('society')
                 .upsert(dbRecord as any, {
                     onConflict: 'slug', // Use slug as unique identifier
                     ignoreDuplicates: false // Update if exists
