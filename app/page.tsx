@@ -1,4 +1,5 @@
 import { RealEstateSearch } from "@/components/home/real-estate-search"
+import { AreaSearch } from "@/components/home/area-search"
 
 export default function Home() {
     return (
@@ -17,8 +18,17 @@ export default function Home() {
                     </p>
                 </div>
 
-                {/* Search Component */}
-                <RealEstateSearch />
+                {/* Property Search */}
+                <div className="mb-8">
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Property Search</h2>
+                    <RealEstateSearch />
+                </div>
+
+                {/* Area Search */}
+                <div className="mt-12">
+                    <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">Area Intelligence Search</h2>
+                    <AreaSearch />
+                </div>
             </div>
         </main>
     )

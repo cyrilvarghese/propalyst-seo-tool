@@ -45,6 +45,12 @@ export function Navigation() {
                         >
                             Properties
                         </Link>
+                        <Link
+                            href="/areas"
+                            className="text-gray-700 hover:text-blue-600 transition-colors"
+                        >
+                            Areas
+                        </Link>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">

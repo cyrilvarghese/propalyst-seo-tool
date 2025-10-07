@@ -1,69 +1,60 @@
-# Service Architecture & Multi-Provider AI Search
+# Service Architecture & AI Search
 
 ## Overview
 
-Propalyst uses a multi-provider AI search architecture that allows switching between Claude WebSearch and Google Gemini for property intelligence extraction.
+Propalyst uses Google Gemini AI search architecture for both property intelligence and area intelligence extraction, with automatic web search grounding for data accuracy.
 
 ---
 
-## Multi-Provider AI Search Architecture
+## AI Search Architecture
 
 ### Current Implementation
-Direct AI search with multiple provider options (no intermediate URL discovery step)
+Google Gemini with search grounding for both properties and areas
 
-### Search Provider Options
-
-#### 1. Claude WebSearch (Default Provider)
-**Purpose**: AI-powered web search using Claude's WebSearch tool
-
-**Capabilities**:
-- Performs 5-7 comprehensive web searches per property
-- Searches multiple aspects: overview, amenities, location, reviews, pricing, lifestyle
-- Extracts detailed narratives (3-4 sentence paragraphs)
-- No domain blocking issues (unrestricted search)
-- Prefilled response technique for JSON consistency
-
-**Configuration**: Requires `ANTHROPIC_API_KEY`
-**Cost**: $10 per 1,000 searches
-
-**Best For**:
-- Deep AI analysis with rich narratives
-- Comprehensive data extraction
-- When source URLs are not required
-
-#### 2. Google Gemini with Search Grounding (Alternative Provider)
-**Purpose**: Google Search integration via Gemini 2.5 Flash
+### Google Gemini with Search Grounding
+**Purpose**: Google Search integration via Gemini 2.0 Flash
 
 **Capabilities**:
 - Uses Google Search results with grounding metadata
 - Provides source URLs and citations
-- Different AI perspective than Claude
+- Extracts structured data from web sources
 - Free tier available
 
 **Configuration**: Requires `GOOGLE_AI_API_KEY`
 **Cost**: Free tier, then pay-as-you-go
 
-**Best For**:
-- Source attribution requirements
-- Google Search quality
-- Cost-conscious deployments
+**Used For**:
+1. **Property Intelligence** - Apartment complexes, gated communities
+2. **Area Intelligence** - Neighborhoods, localities (13 Q&A format)
 
-### Provider Comparison
+### Area Intelligence Feature
+**NEW**: Comprehensive area profiling using AI research
 
-| Feature | Claude WebSearch | Gemini Google Search |
-|---------|------------------|---------------------|
-| Search Quality | AI-curated, comprehensive | Google Search results |
-| Source URLs | No metadata | Grounding metadata with sources |
-| Max Searches | 7 per request | Unlimited |
-| JSON Format | Prefilled technique | Standard response |
-| Cost | $10/1000 searches | Free tier available |
-| Narrative Detail | 3-4 sentence paragraphs | Shorter descriptions |
-| Best For | Deep AI analysis | Google-quality search results |
+**13-Question Research Format**:
+1. **Vibe & Lifestyle** (Q1-Q2)
+   - Unique local vibe and best demographic fit
+   - Local parks, shopping centers, leisure spots
 
-### Tavily API Integration (Currently Bypassed)
-- **Status**: Code preserved but not used due to domain blocking
-- **Purpose**: Was used for URL discovery before direct AI search
-- **Note**: Available for future use if domain restrictions are lifted
+2. **Market Data & Investment** (Q3-Q5)
+   - Average price per sq.ft and appreciation rate
+   - Rental yield and rental ranges
+   - Stamp duty and guidance value
+
+3. **Infrastructure & Commute** (Q6-Q8)
+   - Water supply and sewage reliability
+   - Commute times to major hubs
+   - Upcoming infrastructure projects
+
+4. **Local Amenities** (Q9-Q10)
+   - Top hospitals and schools
+   - Premium gated communities
+
+5. **Buyer Strategy & Tips** (Q11-Q13)
+   - Hidden costs estimation
+   - RTM vs UC recommendation
+   - Common mistakes and insider tips
+
+**Database Storage**: `local_areas` table with JSONB columns
 
 ---
 
@@ -85,6 +76,40 @@ Direct AI search with multiple provider options (no intermediate URL discovery s
 - `propertyExists()` - Cache hit check
 
 **Storage Strategy**: See [STORAGE.md](./STORAGE.md) for complete details
+
+### Area Intelligence Service
+**File**: `lib/services/area-intelligence-service.ts`
+
+**Responsibilities**:
+- AI-powered area research using Google Gemini
+- 13-question structured data extraction
+- Confidence score calculation
+- JSON parsing from AI response
+
+**Key Methods**:
+- `researchArea()` - Main research method
+- `buildResearchPrompt()` - Constructs 13-question prompt
+- `geminiSearch()` - Google Search with grounding
+- `parseAIResponse()` - Extract JSON from response
+- `calculateConfidence()` - Score based on completeness
+
+**Data Extracted**:
+- Vibe & Lifestyle, Market Data, Infrastructure
+- Local Amenities, Buyer Intelligence, Narratives
+
+### Area Helpers
+**File**: `lib/utils/area-helpers.ts`
+
+**Responsibilities**:
+- Slug generation (area + city combination)
+- CSV/JSON/TXT file parsing
+- Data validation and deduplication
+
+**Key Functions**:
+- `generateAreaSlug()` - Creates unique slug from area+city
+- `parseAreaFile()` - Universal file parser
+- `validateAreaData()` - Pre-processing validation
+- `deduplicateAreas()` - Remove duplicate entries
 
 ### SerpAPI Service
 **File**: `lib/services/serpapi-service.ts`
@@ -136,13 +161,13 @@ Direct AI search with multiple provider options (no intermediate URL discovery s
 
 ## API Routes
 
-### Main Search Endpoint
+### Property Search Endpoint
 **File**: `app/api/search/route.ts`
 
 **Responsibilities**:
 - Handle POST requests from client
 - Check filesystem cache
-- Route to appropriate AI provider
+- Use Google Gemini for AI analysis
 - Fetch property images via SerpAPI
 - Store to filesystem + Supabase
 - Stream responses to client
@@ -151,7 +176,6 @@ Direct AI search with multiple provider options (no intermediate URL discovery s
 ```typescript
 {
   query: string,
-  provider: 'claude' | 'gemini',
   skipCache: boolean
 }
 ```
@@ -169,11 +193,69 @@ Direct AI search with multiple provider options (no intermediate URL discovery s
 - Graceful image fetch failures (proceeds without images)
 - Cache misses handled transparently
 
+### Area Search Endpoints
+**Files**: `app/api/areas/*`
+
+#### 1. GET `/api/areas` - List All Areas
+**File**: `app/api/areas/route.ts`
+
+**Returns**: All areas with city names (JOIN with cities table)
+
+#### 2. POST `/api/areas/search` - Single Area Search
+**File**: `app/api/areas/search/route.ts`
+
+**Request**:
+```typescript
+{
+  areaName: string,
+  cityName: string,
+  skipCache: boolean
+}
+```
+
+**Flow**:
+1. Check cache (slug-based)
+2. Auto-create city if doesn't exist
+3. Run AI research (13 questions)
+4. Upsert to `local_areas` table
+5. Return enriched area data
+
+**Key Features**:
+- Auto city creation
+- Upsert by `(city_id, area)` constraint
+- Slug uniqueness guaranteed by constraint
+
+#### 3. POST `/api/areas/bulk-enrich` - Bulk Upload
+**File**: `app/api/areas/bulk-enrich/route.ts`
+
+**Request**: FormData with file (CSV/JSON/TXT)
+
+**Flow**:
+1. Parse file (area-city pairs)
+2. Validate and deduplicate
+3. Process each area sequentially
+4. Stream progress to client
+5. Cooldown every 20 areas (30 seconds)
+
+**Streaming Messages**:
+- `start` - Begin processing
+- `progress` - Current area status
+- `completed` - Area enriched successfully
+- `cooldown` - 30-second pause
+- `error` - Failed area
+- `complete` - All done (summary stats)
+
+#### 4. GET `/api/areas/[id]` - Single Area Detail
+**File**: `app/api/areas/[id]/route.ts`
+
+**Returns**: Full area data by ID
+
 ---
 
 ## Type Definitions
 
-### File: `lib/types/property-intelligence.ts`
+### Property Types
+**File**: `lib/types/property-intelligence.ts`
 
 #### Main Interfaces:
 
@@ -219,25 +301,77 @@ Direct AI search with multiple provider options (no intermediate URL discovery s
 - connectivityAnalysis, familyAppeal, expatriatePopulation
 - entertainmentLifestyle, onlinePresenceBuzz, celebrityResidents
 
+### Area Types
+**File**: `lib/types/area-intelligence.ts`
+
+#### Main Interfaces:
+
+**AreaIntelligenceResult**
+- Core area data structure
+- Contains vibe, market, infrastructure, amenities, buyer intelligence, narratives
+- Confidence scoring (0-100)
+
+**VibeAndLifestyle**
+- uniqueVibe, bestSuitedFor (families/young_professionals/retirees/students)
+- localParks, shoppingCenters, leisureSpots, diningAndSocial
+
+**MarketData**
+- avgPricePerSqft, appreciationRate
+- rentalYieldMin/Max, rental2bhk/3bhk ranges
+- investmentRating (rental_income/capital_appreciation/balanced)
+- stampDutyPercentage, registrationCostsNote
+
+**Infrastructure**
+- waterSupplyReliability, sewageInfrastructure
+- commuteTimes (array of destinations with min/max minutes)
+- upcomingProjects, metroConnectivity
+
+**LocalAmenities**
+- topHospitals (name, distanceKm, specialty)
+- topSchools (name, type, distanceKm)
+- premiumCommunities, shoppingMalls, entertainmentVenues
+
+**BuyerIntelligence**
+- hiddenCostsPercentage, hiddenCostsBreakdown
+- rtmVsUcRecommendation
+- insiderTips, commonMistakes
+- bestForProfile (end_user/investor/family/bachelor/any)
+
+**AreaNarratives**
+- vibeNarrative, marketNarrative, connectivityNarrative
+- amenitiesNarrative, investmentNarrative
+- 2-3 paragraphs each
+
 ---
 
 ## UI Components
 
-### Search Form & Streaming Handler
+### Property Search Form
 **File**: `components/home/real-estate-search.tsx`
 
 **Responsibilities**:
-- Provider selection toggle (Claude/Gemini)
-- Search query input
+- Property search query input
 - Streaming response handler
 - Progress indicators
 - Error display
 
 **Key Features**:
-- Provider preference saved to localStorage
 - Real-time streaming updates
 - Refresh button integration
 - Loading states
+
+### Area Search Form
+**File**: `components/home/area-search.tsx`
+
+**Responsibilities**:
+- Separate City and Area input fields
+- Area search with AI research
+- Auto-redirect to area detail page
+
+**Key Features**:
+- Two-input design (city + area)
+- Success toast notifications
+- Error handling
 
 ### Unified Property Card
 **File**: `components/home/unified-property-card.tsx` (960+ lines)
@@ -308,10 +442,30 @@ data/
 ```
 
 **Supabase Database**:
-- Table: `society`
+
+### Properties Table: `society`
+- Stores property/apartment complex data
 - JSONB columns for nested data
 - Indexed for efficient querying
 - See [STORAGE.md](./STORAGE.md) for schema details
+
+### Areas Table: `local_areas`
+- Stores neighborhood/locality intelligence
+- Foreign key to `cities` table
+- JSONB columns: vibe_and_lifestyle, market_data, infrastructure, local_amenities, buyer_intelligence, narratives
+- Unique constraints: `slug`, `(city_id, area)`
+- Auto-updated property_count via trigger
+
+### Cities Table: `cities`
+- Master list of cities
+- Auto-created when searching new areas
+- Referenced by `local_areas.city_id`
+
+### Database Relationships
+```
+cities (1) ──< (many) local_areas (1) ──< (many) society
+  id                    city_id              area (foreign key)
+```
 
 ---
 
@@ -321,32 +475,65 @@ data/
 Rb-next-app-v3/
 ├── app/
 │   ├── api/
-│   │   └── search/
-│   │       └── route.ts        # Main API endpoint
-│   └── page.tsx                # Home page
+│   │   ├── search/
+│   │   │   └── route.ts              # Property search
+│   │   ├── bulk-search/
+│   │   │   └── route.ts              # Bulk property search
+│   │   ├── areas/
+│   │   │   ├── route.ts              # List all areas
+│   │   │   ├── search/
+│   │   │   │   └── route.ts          # Single area search
+│   │   │   ├── bulk-enrich/
+│   │   │   │   └── route.ts          # Bulk area enrichment
+│   │   │   └── [id]/
+│   │   │       └── route.ts          # Get area by ID
+│   │   └── properties/
+│   │       └── [slug]/
+│   │           └── route.ts          # Get property by slug
+│   ├── areas/
+│   │   ├── page.tsx                  # Areas list + bulk upload
+│   │   └── [id]/
+│   │       └── page.tsx              # Area detail page
+│   ├── properties/
+│   │   ├── page.tsx                  # Properties list + bulk upload
+│   │   └── [slug]/
+│   │       └── page.tsx              # Property detail page
+│   └── page.tsx                      # Home page
 ├── components/
-│   ├── ui/                     # shadcn/ui components
-│   ├── home/                   # Search & display components
-│   ├── auth/                   # Authentication
-│   └── common/                 # Shared components
+│   ├── ui/                           # shadcn/ui components
+│   ├── home/                         # Search & display components
+│   │   ├── real-estate-search.tsx    # Property search form
+│   │   ├── area-search.tsx           # Area search form
+│   │   ├── unified-property-card.tsx # Property display
+│   │   └── sources-dialog.tsx        # Source citations
+│   ├── auth/                         # Authentication
+│   └── common/                       # Shared components
 ├── lib/
-│   ├── services/               # Business logic services
+│   ├── services/                     # Business logic services
 │   │   ├── property-storage-service.ts
+│   │   ├── area-intelligence-service.ts  # NEW
 │   │   ├── serpapi-service.ts
 │   │   ├── hybrid-search-service.ts (deprecated)
 │   │   └── tavily-service.ts (deprecated)
-│   ├── utils/                  # Utility functions
-│   │   └── supabase-client.ts
-│   └── types/                  # TypeScript interfaces
-│       └── property-intelligence.ts
+│   ├── utils/                        # Utility functions
+│   │   ├── supabase-client.ts
+│   │   ├── area-helpers.ts           # NEW
+│   │   └── cooldown-manager.ts       # NEW
+│   └── types/                        # TypeScript interfaces
+│       ├── property-intelligence.ts
+│       └── area-intelligence.ts      # NEW
+├── migrations/
+│   └── 001_enhance_local_areas.sql   # Area table migration
+├── scripts/
+│   └── enrich-existing-areas.ts      # Bulk migration script
 ├── data/
-│   └── properties/             # Filesystem cache
-├── docs/                       # Detailed documentation
+│   └── properties/                   # Filesystem cache
+├── docs/                             # Detailed documentation
 │   ├── DATA-FLOW.md
 │   ├── ARCHITECTURE.md (this file)
 │   ├── STORAGE.md
 │   └── NEXT-JS-CONCEPTS.md
-└── CLAUDE.md                   # Quick reference guide
+└── CLAUDE.md                         # Quick reference guide
 ```
 
 ---

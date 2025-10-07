@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Search, Loader2 } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Toggle } from "@/components/ui/toggle"
 import { UnifiedPropertyCard } from "./unified-property-card"
 import { IntelligentPropertyResult } from '@/lib/types/property-intelligence'
 
@@ -15,21 +14,7 @@ export function RealEstateSearch() {
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [searchResults, setSearchResults] = useState<IntelligentPropertyResult[]>([])
     const [searchError, setSearchError] = useState<string | null>(null)
-    const [searchProvider, setSearchProvider] = useState<'claude' | 'gemini'>('claude')
-
-    // Load saved provider preference from localStorage
-    useEffect(() => {
-        const saved = localStorage.getItem('searchProvider')
-        if (saved === 'claude' || saved === 'gemini') {
-            setSearchProvider(saved)
-        }
-    }, [])
-
-    // Save provider preference when changed
-    const handleProviderChange = (provider: 'claude' | 'gemini') => {
-        setSearchProvider(provider)
-        localStorage.setItem('searchProvider', provider)
-    }
+    const searchProvider = 'gemini' // Fixed to Gemini only
     const [searchMetadata, setSearchMetadata] = useState<{
         totalFound: number;
         searchTime: number;
@@ -284,28 +269,6 @@ export function RealEstateSearch() {
 
     return (
         <div className="w-full max-w-4xl mx-auto px-4">
-            {/* Search Provider Selector */}
-            <div className="flex justify-center items-center gap-3 mb-4">
-                <span className="text-sm text-muted-foreground">AI Provider:</span>
-                <div className="inline-flex gap-1 rounded-lg border bg-background p-1">
-                    <Toggle
-                        pressed={searchProvider === 'claude'}
-                        onPressedChange={() => handleProviderChange('claude')}
-                        aria-label="Use Claude WebSearch"
-                        className="data-[state=on]:bg-gradient-to-r data-[state=on]:from-indigo-600 data-[state=on]:to-purple-600 data-[state=on]:text-white"
-                    >
-                        Claude WebSearch
-                    </Toggle>
-                    <Toggle
-                        pressed={searchProvider === 'gemini'}
-                        onPressedChange={() => handleProviderChange('gemini')}
-                        aria-label="Use Google Gemini"
-                        className="data-[state=on]:bg-gradient-to-r data-[state=on]:from-indigo-600 data-[state=on]:to-purple-600 data-[state=on]:text-white"
-                    >
-                        Google Gemini
-                    </Toggle>
-                </div>
-            </div>
 
             {/* Google-style Search Box */}
             <form onSubmit={handleSearch} className="mb-8">

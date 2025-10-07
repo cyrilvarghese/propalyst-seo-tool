@@ -1,6 +1,12 @@
 # Complete End-to-End Data Flow
 
-**Overview**: User searches → AI analyzes property → Images fetched → Results cached → Comprehensive UI display with images, citations, and narratives
+**Overview**: This document covers two main workflows:
+1. **Property Intelligence** - User searches → AI analyzes property → Images fetched → Results cached → UI display
+2. **Area Intelligence** - User searches → AI researches area (13 Q&A) → Results saved to database → UI display
+
+---
+
+## PROPERTY INTELLIGENCE FLOW
 
 ---
 
@@ -554,6 +560,371 @@ DISPLAY:
 STORED IN TWO PLACES:
 1. 💾 Filesystem: data/properties/embassy-lake-terraces.json
 2. 🗄️ Supabase: society table (row with slug='embassy-lake-terraces')
+```
+
+---
+
+## AREA INTELLIGENCE FLOW
+
+---
+
+## Phase 1: User Search & Auto-City Creation
+
+**Flow**: User Input (City + Area) → API Route → Check City → Auto-Create if Missing → Continue
+
+**Steps**:
+1. **User enters search query** in `components/home/area-search.tsx`
+   - Example: City="Bangalore", Area="Whitefield"
+   - Separate input fields for clarity
+
+2. **Frontend sends POST request** to `/api/areas/search`
+   ```typescript
+   const response = await fetch('/api/areas/search', {
+     method: 'POST',
+     body: JSON.stringify({
+       areaName: 'Whitefield',
+       cityName: 'Bangalore',
+       skipCache: false
+     })
+   });
+   ```
+
+3. **API Route checks cache** (by slug)
+   - Generates slug: `"Whitefield" + "Bangalore"` → `"whitefield-bangalore"`
+   - Queries `local_areas` table: `WHERE slug = 'whitefield-bangalore'`
+   - If found AND has `last_analyzed` → Return cached data
+   - If not found → Continue to city lookup
+
+4. **City lookup with auto-creation**
+   ```typescript
+   // Try to find existing city
+   const { data: existingCity } = await supabase
+     .from('cities')
+     .select('id')
+     .ilike('name', 'Bangalore')
+     .single()
+
+   if (!existingCity) {
+     // Auto-create city
+     const { data: newCity } = await supabase
+       .from('cities')
+       .insert({ name: 'Bangalore' })
+       .select('id')
+       .single()
+   }
+   ```
+
+**Key Feature**: Never fails due to missing city - always auto-creates ✅
+
+---
+
+## Phase 2: AI-Powered Area Research (13 Questions)
+
+**Flow**: AI Search → Extract Structured Data → Calculate Confidence → Return JSON
+
+**File**: `lib/services/area-intelligence-service.ts`
+
+**Steps**:
+1. **Construct comprehensive 13-question prompt**
+   ```typescript
+   const prompt = `Research ${areaName}, ${cityName} and answer:
+
+   VIBE & LIFESTYLE:
+   Q1. What is the unique local vibe and best demographic fit?
+   Q2. Where are the main parks, shopping centers, leisure spots?
+
+   MARKET DATA & INVESTMENT:
+   Q3. Average price per sq.ft and appreciation rate?
+   Q4. Rental yield and typical rental ranges?
+   Q5. Stamp duty, registration costs, guidance value?
+
+   INFRASTRUCTURE & COMMUTE:
+   Q6. Water supply and sewage reliability?
+   Q7. Commute times to major hubs?
+   Q8. Upcoming infrastructure projects?
+
+   LOCAL AMENITIES:
+   Q9. Top hospitals and schools?
+   Q10. Premium gated communities?
+
+   BUYER STRATEGY & TIPS:
+   Q11. Hidden costs breakdown?
+   Q12. RTM vs UC recommendation?
+   Q13. Common mistakes and insider tips?
+
+   Return JSON with structured data...`;
+   ```
+
+2. **Gemini performs Google Search** with grounding
+   ```typescript
+   const model = gemini.getGenerativeModel({
+     model: 'gemini-2.0-flash-exp',
+     tools: [{ googleSearch: {} }]
+   });
+
+   const result = await model.generateContent(prompt);
+   ```
+
+3. **Parse AI response** and extract JSON
+   ```typescript
+   // Extract JSON from markdown code blocks or plain JSON
+   const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) ||
+                     aiResponse.match(/\{[\s\S]*\}/);
+   const parsed = JSON.parse(jsonString);
+   ```
+
+4. **Calculate confidence score** (0-100)
+   ```typescript
+   // Based on data completeness
+   const weights = {
+     description: 5,
+     vibeAndLifestyle: 15,
+     marketData: 20,
+     infrastructure: 20,
+     localAmenities: 15,
+     buyerIntelligence: 15,
+     narratives: 5
+   };
+   // Sum up weights for non-empty fields
+   ```
+
+**Data Extracted**:
+- Vibe & Lifestyle (demographics, parks, shopping)
+- Market Data (prices, rental yields, stamp duty)
+- Infrastructure (water, commute times, projects)
+- Local Amenities (hospitals, schools, communities)
+- Buyer Intelligence (hidden costs, tips, mistakes)
+- Narratives (5 paragraphs: vibe, market, connectivity, amenities, investment)
+
+---
+
+## Phase 3: Database Upsert with Constraint Handling
+
+**Flow**: Enriched Data → Prepare Record → Upsert by (city_id, area) → Return Result
+
+**File**: `app/api/areas/search/route.ts`
+
+**Steps**:
+1. **Prepare area record**
+   ```typescript
+   const areaRecord = {
+     area: 'Whitefield',
+     city_id: cityData.id,
+     slug: 'whitefield-bangalore',
+     description: enrichedData.description,
+     vibe_and_lifestyle: enrichedData.vibeAndLifestyle,
+     market_data: enrichedData.marketData,
+     infrastructure: enrichedData.infrastructure,
+     local_amenities: enrichedData.localAmenities,
+     buyer_intelligence: enrichedData.buyerIntelligence,
+     narratives: enrichedData.narratives,
+     confidence_score: enrichedData.confidenceScore,
+     last_analyzed: new Date().toISOString(),
+     data_source: 'gemini_search'
+   };
+   ```
+
+2. **Upsert to database**
+   ```typescript
+   const { data: savedArea } = await supabase
+     .from('local_areas')
+     .upsert(areaRecord, {
+       onConflict: 'city_id,area'  // Composite unique constraint
+     })
+     .select('*, cities(name)')
+     .single();
+   ```
+
+**Key Constraints**:
+- **Unique constraint**: `(city_id, area)` - Same area name in same city
+- **Slug uniqueness**: Automatically guaranteed by `area + city` formula
+- **No conflicts**: Upsert updates existing row if `(city_id, area)` match
+
+**Why This Works**:
+```
+IF slug = area + city
+AND (city_id, area) is unique
+THEN slug is automatically unique ✅
+```
+
+---
+
+## Phase 4: Response to Client
+
+**Flow**: Saved Area → Transform to Frontend Format → Return JSON
+
+**Steps**:
+1. **Transform database row to API response**
+   ```typescript
+   return NextResponse.json({
+     success: true,
+     area: {
+       id: savedArea.id,
+       area: savedArea.area,
+       cityId: savedArea.city_id,
+       cityName: savedArea.cities.name,  // From JOIN
+       vibeAndLifestyle: savedArea.vibe_and_lifestyle,
+       marketData: savedArea.market_data,
+       infrastructure: savedArea.infrastructure,
+       localAmenities: savedArea.local_amenities,
+       buyerIntelligence: savedArea.buyer_intelligence,
+       narratives: savedArea.narratives,
+       confidenceScore: savedArea.confidence_score,
+       lastAnalyzed: savedArea.last_analyzed
+     },
+     fromCache: false
+   });
+   ```
+
+2. **Client redirects to area detail page**
+   ```typescript
+   if (data.success && data.area?.id) {
+     router.push(`/areas/${data.area.id}`);
+   }
+   ```
+
+---
+
+## Phase 5: Area Detail Page Display
+
+**Flow**: Fetch Area by ID → Display Structured Information → Show Narratives
+
+**File**: `app/areas/[id]/page.tsx`
+
+**Sections Displayed**:
+
+1. **Hero Section**
+   - Area name + city
+   - Confidence score badge
+   - Last analyzed timestamp
+
+2. **Vibe & Lifestyle Tab**
+   - Unique vibe description
+   - Best suited for demographics
+   - Local parks, shopping centers, leisure spots
+
+3. **Market Data Tab**
+   - Average price per sq.ft
+   - Appreciation rate
+   - Rental yield ranges
+   - Stamp duty percentage
+
+4. **Infrastructure Tab**
+   - Water supply reliability
+   - Commute times grid
+   - Upcoming projects list
+   - Metro connectivity
+
+5. **Local Amenities Tab**
+   - Top hospitals table
+   - Top schools table
+   - Premium communities
+   - Shopping malls
+
+6. **Buyer Intelligence Tab**
+   - Hidden costs breakdown
+   - RTM vs UC recommendation
+   - Insider tips
+   - Common mistakes
+
+7. **Narratives Accordion**
+   - Vibe narrative (2-3 paragraphs)
+   - Market narrative
+   - Connectivity narrative
+   - Amenities narrative
+   - Investment narrative
+
+---
+
+## Complete Area Intelligence Diagram
+
+```
+USER INPUT (City + Area)
+   ↓
+[Area Search Form] → POST /api/areas/search { areaName, cityName, skipCache }
+   ↓
+[Check Cache] → local_areas WHERE slug = 'whitefield-bangalore' exists?
+   ↓
+   YES → Return cached area
+   ↓
+   NO → Continue to city lookup
+   ↓
+[City Lookup]
+   ↓
+   Found? → Use existing city_id
+   ↓
+   Not Found? → INSERT new city → Get new city_id ✅
+   ↓
+[AI Research] → Gemini Google Search → 13 Questions
+   ↓
+   Q1-Q2: Vibe & Lifestyle
+   Q3-Q5: Market Data & Investment
+   Q6-Q8: Infrastructure & Commute
+   Q9-Q10: Local Amenities
+   Q11-Q13: Buyer Strategy & Tips
+   ↓
+[Parse JSON Response]
+   ↓
+   Extract: vibeAndLifestyle, marketData, infrastructure,
+            localAmenities, buyerIntelligence, narratives
+   ↓
+   Calculate: confidenceScore (0-100)
+   ↓
+[UPSERT TO DATABASE]
+   ↓
+   Conflict Check: (city_id, area) exists?
+   ↓
+   YES → UPDATE existing row with fresh data
+   NO → INSERT new row
+   ↓
+   Slug uniqueness: Guaranteed by formula (area + city)
+   ↓
+[Return Response] → { success: true, area: {...}, fromCache: false }
+   ↓
+[Redirect to Area Detail] → /areas/{id}
+   ↓
+DISPLAY:
+- Hero (area name, city, confidence)
+- Vibe & Lifestyle (demographics, parks, shopping)
+- Market Data (prices, rental yields, stamp duty)
+- Infrastructure (water, commute, projects)
+- Local Amenities (hospitals, schools, communities)
+- Buyer Intelligence (hidden costs, tips, mistakes)
+- Narratives (5 paragraphs in accordion)
+
+---
+
+STORED IN DATABASE:
+🗄️ Supabase local_areas table:
+   - Unique constraint on (city_id, area)
+   - JSONB columns for structured data
+   - Auto-updated property_count trigger
+   - Foreign key to cities table
+```
+
+---
+
+## Bulk Area Enrichment Flow
+
+**File**: `app/api/areas/bulk-enrich/route.ts`
+
+**Steps**:
+1. User uploads CSV/JSON/TXT file with area-city pairs
+2. Parse file → Validate → Deduplicate
+3. For each area:
+   - Call `/api/areas/search` internally
+   - Stream progress to client
+4. Cooldown every 20 areas (30 seconds)
+5. Return summary statistics
+
+**Streaming Messages**:
+```typescript
+{ type: 'start', total: 50 }
+{ type: 'progress', current: 1, area: 'Whitefield', city: 'Bangalore' }
+{ type: 'completed', area: { ...enriched data... } }
+{ type: 'cooldown', message: 'Pausing for 30 seconds...' }
+{ type: 'error', error: 'City not found' }
+{ type: 'complete', stats: { total: 50, succeeded: 48, failed: 2 } }
 ```
 
 ---

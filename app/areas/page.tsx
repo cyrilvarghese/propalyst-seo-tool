@@ -9,43 +9,37 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Loader2, RefreshCw, ExternalLink, Upload, X } from 'lucide-react'
 import Link from 'next/link'
+import { AreaIntelligenceResult } from '@/lib/types/area-intelligence'
 
-interface Property {
+interface Area {
     id: string
-    name: string
-    slug: string
+    area: string
+    cityName: string
+    citySection?: string
     description?: string
-    confidence_score?: number
-    created_at: string
-    specifications?: {
-        propertyType?: string
-        priceRange?: string
-    }
-    location?: {
-        city?: string
-        neighborhood?: string
-    }
-    isProcessing?: boolean
-    fromCache?: boolean
+    propertyCount: number
+    confidenceScore?: number
+    lastAnalyzed?: string
+    createdAt: string
 }
 
-export default function PropertiesPage() {
-    const [properties, setProperties] = useState<Property[]>([])
+export default function AreasPage() {
+    const [areas, setAreas] = useState<Area[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [count, setCount] = useState(0)
 
-    // Bulk search state
+    // Bulk enrich state
     const [showBulkDialog, setShowBulkDialog] = useState(false)
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const bulkProvider = 'gemini' // Fixed to Gemini only
     const [skipCache, setSkipCache] = useState(false)
-    const [parsedSocieties, setParsedSocieties] = useState<string[]>([])
+    const [defaultCity, setDefaultCity] = useState('')
+    const [parsedAreas, setParsedAreas] = useState<Array<{ area: string; city: string }>>([])
     const [isBulkProcessing, setIsBulkProcessing] = useState(false)
     const [currentProcessing, setCurrentProcessing] = useState<string | null>(null)
     const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 })
-    const [processingProperty, setProcessingProperty] = useState<Property | null>(null)
-    const [isPaused, setIsPaused] = useState(false)
+    const [processingArea, setProcessingArea] = useState<Area | null>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
 
     // Cooldown state
@@ -56,30 +50,30 @@ export default function PropertiesPage() {
     const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
     const [bulkStats, setBulkStats] = useState({ succeeded: 0, failed: 0, skipped: 0 })
 
-    const fetchProperties = async () => {
+    const fetchAreas = async () => {
         setLoading(true)
         setError(null)
 
         try {
-            const response = await fetch('/api/properties')
+            const response = await fetch('/api/areas')
             const data = await response.json()
 
             if (!data.success) {
-                throw new Error(data.error || 'Failed to fetch properties')
+                throw new Error(data.error || 'Failed to fetch areas')
             }
 
-            setProperties(data.properties || [])
+            setAreas(data.areas || [])
             setCount(data.count || 0)
         } catch (err: any) {
             setError(err.message)
-            console.error('Error fetching properties:', err)
+            console.error('Error fetching areas:', err)
         } finally {
             setLoading(false)
         }
     }
 
     useEffect(() => {
-        fetchProperties()
+        fetchAreas()
     }, [])
 
     const formatDate = (dateString: string) => {
@@ -110,51 +104,79 @@ export default function PropertiesPage() {
             const text = await file.text()
             const ext = file.name.split('.').pop()?.toLowerCase()
 
-            let societies: string[] = []
+            let areasList: Array<{ area: string; city: string }> = []
 
             if (ext === 'json') {
                 const data = JSON.parse(text)
-                societies = Array.isArray(data) ? data : []
+                if (Array.isArray(data)) {
+                    areasList = data.map(item => {
+                        if (typeof item === 'string') {
+                            return { area: item, city: defaultCity || '' }
+                        } else if (item.area) {
+                            return { area: item.area, city: item.city || defaultCity || '' }
+                        }
+                        return null
+                    }).filter(Boolean) as Array<{ area: string; city: string }>
+                }
             } else if (ext === 'csv') {
                 const lines = text.split('\n').map(line => line.trim()).filter(line => line)
                 const firstLine = lines[0]?.toLowerCase()
-                societies = firstLine?.includes('name') || firstLine?.includes('property') ? lines.slice(1) : lines
+                const hasHeader = firstLine?.includes('area') || firstLine?.includes('city')
+                const startIndex = hasHeader ? 1 : 0
+
+                for (let i = startIndex; i < lines.length; i++) {
+                    const line = lines[i]
+                    if (line.includes(',')) {
+                        const [area, city] = line.split(',').map(s => s.trim())
+                        if (area && city) {
+                            areasList.push({ area, city })
+                        }
+                    } else if (defaultCity) {
+                        areasList.push({ area: line, city: defaultCity })
+                    }
+                }
             } else if (ext === 'txt') {
-                societies = text.split('\n').map(line => line.trim()).filter(line => line)
+                const lines = text.split('\n').map(line => line.trim()).filter(line => line)
+                if (defaultCity) {
+                    areasList = lines.map(area => ({ area, city: defaultCity }))
+                }
             }
 
-            setParsedSocieties(societies.filter(s => s))
+            setParsedAreas(areasList.filter(item => item.area && item.city))
         } catch (err) {
             console.error('Error parsing file:', err)
-            setParsedSocieties([])
+            setParsedAreas([])
         }
     }
 
-    // Start bulk search
-    const handleStartBulkSearch = async () => {
-        if (!selectedFile || parsedSocieties.length === 0) return
+    // Start bulk enrichment
+    const handleStartBulkEnrich = async () => {
+        if (!selectedFile || parsedAreas.length === 0) return
 
         setShowBulkDialog(false)
         setIsBulkProcessing(true)
-        setBulkProgress({ current: 0, total: parsedSocieties.length })
+        setBulkProgress({ current: 0, total: parsedAreas.length })
         setBulkStats({ succeeded: 0, failed: 0, skipped: 0 })
 
         const formData = new FormData()
         formData.append('file', selectedFile)
         formData.append('provider', bulkProvider)
         formData.append('skipCache', skipCache.toString())
+        if (defaultCity) {
+            formData.append('defaultCity', defaultCity)
+        }
 
         abortControllerRef.current = new AbortController()
 
         try {
-            const response = await fetch('/api/bulk-search', {
+            const response = await fetch('/api/areas/bulk-enrich', {
                 method: 'POST',
                 body: formData,
                 signal: abortControllerRef.current.signal
             })
 
             if (!response.ok) {
-                throw new Error('Bulk search failed')
+                throw new Error('Bulk enrichment failed')
             }
 
             const reader = response.body?.getReader()
@@ -180,42 +202,41 @@ export default function PropertiesPage() {
 
                         switch (message.type) {
                             case 'processing':
-                                setCurrentProcessing(message.society)
+                                setCurrentProcessing(message.area)
                                 setBulkProgress({ current: message.current, total: message.total })
-                                setProcessingProperty({
+                                setProcessingArea({
                                     id: 'temp-' + Date.now(),
-                                    name: message.society,
-                                    slug: '',
-                                    created_at: new Date().toISOString(),
-                                    isProcessing: true
+                                    area: message.area.split(',')[0] || message.area,
+                                    cityName: message.area.split(',')[1]?.trim() || '',
+                                    propertyCount: 0,
+                                    createdAt: new Date().toISOString()
                                 })
                                 break
 
                             case 'completed':
-                                console.log('✅ Property completed:', message.property?.name || message.society)
+                                console.log('✅ Area completed:', message.areaData?.area)
 
-                                // Add property to table at the TOP (newest first)
-                                if (message.property) {
-                                    const newProperty: Property = {
-                                        id: message.property.id,
-                                        name: message.property.name,
-                                        slug: message.property.slug,
-                                        description: message.property.description,
-                                        confidence_score: message.property.confidence_score,
-                                        created_at: message.property.created_at || new Date().toISOString(),
-                                        specifications: message.property.specifications,
-                                        location: message.property.location
+                                // Add area to table at the TOP
+                                if (message.areaData) {
+                                    const newArea: Area = {
+                                        id: message.areaData.id,
+                                        area: message.areaData.area,
+                                        cityName: message.areaData.cityName,
+                                        citySection: message.areaData.citySection,
+                                        description: message.areaData.description,
+                                        propertyCount: message.areaData.propertyCount || 0,
+                                        confidenceScore: message.areaData.confidenceScore,
+                                        lastAnalyzed: message.areaData.lastAnalyzed,
+                                        createdAt: message.areaData.createdAt || new Date().toISOString()
                                     }
 
-                                    setProperties(prev => [newProperty, ...prev])
+                                    setAreas(prev => [newArea, ...prev])
                                     setCount(prev => prev + 1)
-                                    console.log('✅ Property added to table:', newProperty.name)
-                                } else {
-                                    console.warn('⚠️ Completed but no property data received')
+                                    console.log('✅ Area added to table:', newArea.area)
                                 }
 
                                 // Clear processing state
-                                setProcessingProperty(null)
+                                setProcessingArea(null)
 
                                 // Update stats
                                 if (message.fromCache) {
@@ -226,14 +247,14 @@ export default function PropertiesPage() {
                                 break
 
                             case 'failed':
-                                setProcessingProperty(null)
+                                setProcessingArea(null)
                                 setBulkStats(prev => ({ ...prev, failed: prev.failed + 1 }))
-                                console.error('Failed:', message.society, message.error)
+                                console.error('Failed:', message.area, message.error)
                                 break
 
                             case 'cooldown':
                                 console.log('🧊 Cooldown triggered:', message)
-                                setCurrentCooldownRequestId(message.requestId)  // ← Store for resume
+                                setCurrentCooldownRequestId(message.requestId)
                                 setCooldownItemsProcessed(message.itemsProcessed)
                                 setCooldownRemaining(message.cooldownSeconds)
                                 setShowCooldown(true)
@@ -245,9 +266,9 @@ export default function PropertiesPage() {
                                             clearInterval(timerId)
                                             setShowCooldown(false)
 
-                                            // Timer finished - send resume signal to server
+                                            // Timer finished - send resume signal
                                             if (message.requestId) {
-                                                fetch('/api/bulk-search/resume', {
+                                                fetch('/api/areas/bulk-enrich/resume', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
                                                     body: JSON.stringify({ requestId: message.requestId })
@@ -265,7 +286,7 @@ export default function PropertiesPage() {
                                 break
 
                             case 'complete':
-                                console.log('Bulk search complete:', message.summary)
+                                console.log('Bulk enrichment complete:', message.summary)
                                 break
                         }
                     } catch (e) {
@@ -275,25 +296,25 @@ export default function PropertiesPage() {
             }
         } catch (err: any) {
             if (err.name !== 'AbortError') {
-                console.error('Bulk search error:', err)
+                console.error('Bulk enrichment error:', err)
                 setError(err.message)
             }
         } finally {
             setIsBulkProcessing(false)
             setCurrentProcessing(null)
-            setProcessingProperty(null)
+            setProcessingArea(null)
             abortControllerRef.current = null
         }
     }
 
-    // Cancel bulk search
-    const handleCancelBulkSearch = () => {
+    // Cancel bulk enrichment
+    const handleCancelBulkEnrich = () => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort()
         }
         setIsBulkProcessing(false)
         setCurrentProcessing(null)
-        setProcessingProperty(null)
+        setProcessingArea(null)
     }
 
     // Continue immediately (skip cooldown)
@@ -320,7 +341,7 @@ export default function PropertiesPage() {
             cooldownTimerRef.current = null
         }
 
-        // Close dialog and reset cooldown
+        // Close dialog
         setShowCooldown(false)
         setCooldownRemaining(0)
         setCurrentCooldownRequestId(null)
@@ -333,16 +354,16 @@ export default function PropertiesPage() {
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="text-3xl">Property Intelligence Archive</CardTitle>
+                                <CardTitle className="text-3xl">Area Intelligence Archive</CardTitle>
                                 <CardDescription className="mt-2">
-                                    All previously analyzed properties ({count} total)
+                                    All analyzed areas with comprehensive market data ({count} total)
                                 </CardDescription>
                             </div>
                             <div className="flex gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={fetchProperties}
+                                    onClick={fetchAreas}
                                     disabled={loading}
                                 >
                                     <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -355,25 +376,20 @@ export default function PropertiesPage() {
                                     disabled={isBulkProcessing}
                                 >
                                     <Upload className="h-4 w-4 mr-2" />
-                                    Bulk Search
+                                    Bulk Enrich
                                 </Button>
-                                <Link href="/">
-                                    <Button variant="default" size="sm">
-                                        New Search
-                                    </Button>
-                                </Link>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {/* Bulk Search Progress Indicator */}
+                        {/* Bulk Enrichment Progress Indicator */}
                         {isBulkProcessing && (
                             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-3">
                                         <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                                         <div>
-                                            <span className="font-medium text-gray-900">Bulk Search in Progress</span>
+                                            <span className="font-medium text-gray-900">Bulk Enrichment in Progress</span>
                                             <p className="text-sm text-gray-600 mt-0.5">
                                                 Processing: {currentProcessing || '...'}
                                             </p>
@@ -386,7 +402,7 @@ export default function PropertiesPage() {
                                         <Button
                                             size="sm"
                                             variant="destructive"
-                                            onClick={handleCancelBulkSearch}
+                                            onClick={handleCancelBulkEnrich}
                                         >
                                             <X className="h-4 w-4 mr-1" />
                                             Cancel
@@ -423,7 +439,7 @@ export default function PropertiesPage() {
                         {loading && (
                             <div className="flex items-center justify-center py-12">
                                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                                <span className="ml-3 text-gray-600">Loading properties...</span>
+                                <span className="ml-3 text-gray-600">Loading areas...</span>
                             </div>
                         )}
 
@@ -433,32 +449,32 @@ export default function PropertiesPage() {
                             </div>
                         )}
 
-                        {!loading && !error && properties.length === 0 && (
+                        {!loading && !error && areas.length === 0 && (
                             <div className="text-center py-12 text-gray-500">
-                                <p className="text-lg mb-4">No properties found</p>
-                                <Link href="/">
-                                    <Button>Search for Properties</Button>
-                                </Link>
+                                <p className="text-lg mb-4">No areas found</p>
+                                <Button onClick={() => setShowBulkDialog(true)}>
+                                    Add Areas
+                                </Button>
                             </div>
                         )}
 
-                        {!loading && !error && properties.length > 0 && (
+                        {!loading && !error && areas.length > 0 && (
                             <div className="border rounded-lg overflow-hidden">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[300px]">Property Name</TableHead>
-                                            <TableHead>Location</TableHead>
-                                            <TableHead>Type</TableHead>
-                                            <TableHead>Price Range</TableHead>
+                                            <TableHead className="w-[300px]">Area Name</TableHead>
+                                            <TableHead>City</TableHead>
+                                            <TableHead>Section</TableHead>
+                                            <TableHead>Properties</TableHead>
                                             <TableHead>Confidence</TableHead>
-                                            <TableHead>Analyzed</TableHead>
+                                            <TableHead>Last Analyzed</TableHead>
                                             <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {/* Processing Row (Yellow Highlight) */}
-                                        {processingProperty && (
+                                        {processingArea && (
                                             <TableRow className="bg-yellow-100 animate-pulse">
                                                 <TableCell colSpan={7} className="py-4">
                                                     <div className="flex items-center justify-center gap-3">
@@ -474,65 +490,51 @@ export default function PropertiesPage() {
                                             </TableRow>
                                         )}
 
-                                        {properties.map((property) => (
-                                            <TableRow key={property.id}>
+                                        {areas.map((area) => (
+                                            <TableRow key={area.id}>
                                                 <TableCell className="font-medium">
                                                     <div>
                                                         <div className="font-semibold text-gray-900">
-                                                            {property.name}
+                                                            {area.area}
                                                         </div>
-                                                        {property.description && (
+                                                        {area.description && (
                                                             <div className="text-sm text-gray-500 truncate max-w-[280px]">
-                                                                {property.description}
+                                                                {area.description}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <div className="text-sm">
-                                                        {property.location?.neighborhood && (
-                                                            <div className="font-medium">{property.location.neighborhood}</div>
-                                                        )}
-                                                        {property.location?.city && (
-                                                            <div className="text-gray-500">{property.location.city}</div>
-                                                        )}
-                                                        {!property.location?.neighborhood && !property.location?.city && (
-                                                            <span className="text-gray-400">N/A</span>
-                                                        )}
-                                                    </div>
+                                                    <div className="text-sm font-medium">{area.cityName}</div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {property.specifications?.propertyType ? (
-                                                        <Badge variant="secondary">
-                                                            {property.specifications.propertyType}
+                                                    {area.citySection ? (
+                                                        <Badge variant="outline">
+                                                            {area.citySection}
                                                         </Badge>
                                                     ) : (
                                                         <span className="text-gray-400">N/A</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {property.specifications?.priceRange ? (
-                                                        <span className="font-medium text-green-600">
-                                                            {property.specifications.priceRange}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">N/A</span>
-                                                    )}
+                                                    <span className="font-medium text-blue-600">
+                                                        {area.propertyCount}
+                                                    </span>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {property.confidence_score ? (
-                                                        <Badge variant={getConfidenceBadgeVariant(property.confidence_score)}>
-                                                            {property.confidence_score}%
+                                                    {area.confidenceScore ? (
+                                                        <Badge variant={getConfidenceBadgeVariant(area.confidenceScore)}>
+                                                            {area.confidenceScore}%
                                                         </Badge>
                                                     ) : (
                                                         <span className="text-gray-400">N/A</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-sm text-gray-600">
-                                                    {formatDate(property.created_at)}
+                                                    {area.lastAnalyzed ? formatDate(area.lastAnalyzed) : 'Not analyzed'}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Link href={`/properties/${property.slug}`}>
+                                                    <Link href={`/areas/${area.id}`}>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
@@ -554,10 +556,10 @@ export default function PropertiesPage() {
                 <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
                     <DialogContent className="sm:max-w-[500px]">
                         <DialogHeader>
-                            <DialogTitle>Bulk Property Search</DialogTitle>
+                            <DialogTitle>Bulk Area Enrichment</DialogTitle>
                             <DialogDescription>
-                                Upload a file with property names to analyze multiple properties at once.
-                                Supported formats: JSON array, CSV, or TXT (one per line)
+                                Upload a file with area names to enrich multiple areas at once.
+                                Supported formats: JSON, CSV (area,city), or TXT (with default city)
                             </DialogDescription>
                         </DialogHeader>
 
@@ -574,8 +576,21 @@ export default function PropertiesPage() {
                                     className="cursor-pointer"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">
-                                    JSON, CSV, or TXT format (one property name per line)
+                                    JSON, CSV, or TXT format
                                 </p>
+                            </div>
+
+                            {/* Default City (for TXT files) */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Default City (optional for TXT files)
+                                </label>
+                                <Input
+                                    type="text"
+                                    placeholder="e.g., Bangalore"
+                                    value={defaultCity}
+                                    onChange={(e) => setDefaultCity(e.target.value)}
+                                />
                             </div>
 
 
@@ -594,14 +609,14 @@ export default function PropertiesPage() {
                             </div>
 
                             {/* Preview */}
-                            {parsedSocieties.length > 0 && (
+                            {parsedAreas.length > 0 && (
                                 <div className="p-3 bg-gray-50 rounded-lg border">
                                     <p className="font-medium text-sm text-gray-900 mb-1">
-                                        ✓ {parsedSocieties.length} properties detected
+                                        ✓ {parsedAreas.length} areas detected
                                     </p>
                                     <p className="text-xs text-gray-600">
-                                        {parsedSocieties.slice(0, 3).join(', ')}
-                                        {parsedSocieties.length > 3 && ` +${parsedSocieties.length - 3} more...`}
+                                        {parsedAreas.slice(0, 3).map(a => `${a.area}, ${a.city}`).join(' • ')}
+                                        {parsedAreas.length > 3 && ` +${parsedAreas.length - 3} more...`}
                                     </p>
                                 </div>
                             )}
@@ -615,12 +630,12 @@ export default function PropertiesPage() {
                                     Cancel
                                 </Button>
                                 <Button
-                                    onClick={handleStartBulkSearch}
-                                    disabled={!selectedFile || parsedSocieties.length === 0}
+                                    onClick={handleStartBulkEnrich}
+                                    disabled={!selectedFile || parsedAreas.length === 0}
                                     className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                                 >
                                     <Upload className="h-4 w-4 mr-2" />
-                                    Start Bulk Search ({parsedSocieties.length})
+                                    Start Bulk Enrich ({parsedAreas.length})
                                 </Button>
                             </div>
                         </div>
@@ -636,7 +651,7 @@ export default function PropertiesPage() {
                                 Cooling Off Period
                             </DialogTitle>
                             <DialogDescription>
-                                Taking a 30-second break after {cooldownItemsProcessed} properties to avoid rate limits and ensure optimal performance.
+                                Taking a 30-second break after {cooldownItemsProcessed} areas to avoid rate limits.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -654,8 +669,8 @@ export default function PropertiesPage() {
                             {/* Explanation Box */}
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                                 <p className="text-sm text-gray-700">
-                                    <strong>Why cooldown?</strong> After processing 20 properties,
-                                    we pause briefly to prevent API rate limits and ensure reliable results for all searches.
+                                    <strong>Why cooldown?</strong> After processing 20 areas,
+                                    we pause briefly to prevent API rate limits and ensure reliable results.
                                 </p>
                             </div>
 
@@ -670,7 +685,7 @@ export default function PropertiesPage() {
 
                             {/* Progress Info */}
                             <div className="text-center text-xs text-gray-500">
-                                Processed {cooldownItemsProcessed} properties • {bulkProgress.total - cooldownItemsProcessed} remaining
+                                Processed {cooldownItemsProcessed} areas • {bulkProgress.total - cooldownItemsProcessed} remaining
                             </div>
                         </div>
                     </DialogContent>
