@@ -14,6 +14,8 @@ import {
     BuyerIntelligence,
     AreaNarratives
 } from '@/lib/types/area-intelligence'
+import { fetchAndUploadAreaImages } from '@/lib/services/area-image-service'
+import { generateAreaSlug } from '@/lib/utils/area-helpers'
 
 export class AreaIntelligenceService {
     private searchId: string
@@ -40,6 +42,23 @@ export class AreaIntelligenceService {
             const aiResponse = await this.geminiSearch(prompt, areaName, cityName)
             const parsed = this.parseAIResponse(aiResponse)
 
+            // Fetch and upload area images
+            console.log(`[AreaIntelligence:${this.searchId}] 🖼️ Fetching area images...`)
+            const slug = generateAreaSlug(areaName, cityName)
+            let areaImages: string[] = []
+
+            try {
+                areaImages = await fetchAndUploadAreaImages(areaName, cityName, slug, 8)
+                if (areaImages.length > 0) {
+                    console.log(`[AreaIntelligence:${this.searchId}] ✅ Added ${areaImages.length} images`)
+                } else {
+                    console.log(`[AreaIntelligence:${this.searchId}] ⚠️ No images fetched`)
+                }
+            } catch (imageError: any) {
+                console.error(`[AreaIntelligence:${this.searchId}] ❌ Image fetch failed (non-blocking):`, imageError.message)
+                // Continue without images - non-blocking failure
+            }
+
             return {
                 area: areaName,
                 description: parsed.description,
@@ -50,6 +69,7 @@ export class AreaIntelligenceService {
                 localAmenities: parsed.localAmenities,
                 buyerIntelligence: parsed.buyerIntelligence,
                 narratives: parsed.narratives,
+                areaImages: areaImages.length > 0 ? areaImages : undefined,
                 confidenceScore: this.calculateConfidence(parsed),
                 lastAnalyzed: new Date().toISOString(),
                 dataSource: 'gemini_search'

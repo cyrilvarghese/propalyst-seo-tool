@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
                 last_analyzed,
                 data_source,
                 created_at,
+                blog_content,
                 cities (
                     id,
                     name
@@ -57,7 +58,8 @@ export async function GET(request: NextRequest) {
             confidenceScore: area.confidence_score,
             lastAnalyzed: area.last_analyzed,
             dataSource: area.data_source,
-            createdAt: area.created_at
+            createdAt: area.created_at,
+            blogContent: area.blog_content
         }))
 
         console.log(`[Areas API] ✅ Fetched ${areas.length} areas`)

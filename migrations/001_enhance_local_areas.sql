@@ -130,8 +130,8 @@ BEGIN
     UPDATE local_areas
     SET property_count = (
         SELECT COUNT(*)
-        FROM society_new
-        WHERE society_new.area = local_areas.id
+        FROM society
+        WHERE society.area = local_areas.id
     )
     WHERE id = COALESCE(NEW.area, OLD.area);
 
@@ -139,11 +139,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger on society_new table
-DROP TRIGGER IF EXISTS trigger_update_area_property_count ON society_new;
+-- Trigger on society table
+DROP TRIGGER IF EXISTS trigger_update_area_property_count ON society;
 
 CREATE TRIGGER trigger_update_area_property_count
-AFTER INSERT OR UPDATE OR DELETE ON society_new
+AFTER INSERT OR UPDATE OR DELETE ON society
 FOR EACH ROW
 EXECUTE FUNCTION update_area_property_count();
 
@@ -151,8 +151,8 @@ EXECUTE FUNCTION update_area_property_count();
 UPDATE local_areas
 SET property_count = (
     SELECT COUNT(*)
-    FROM society_new
-    WHERE society_new.area = local_areas.id
+    FROM society
+    WHERE society.area = local_areas.id
 );
 
 -- ============================================================================

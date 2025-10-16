@@ -38,7 +38,7 @@ export async function GET(
 
         // Fetch all societies in this area
         const { data: societies, error: societiesError } = await supabase
-            .from('society_new')
+            .from('society')
             .select(`
                 id,
                 name,
@@ -77,6 +77,8 @@ export async function GET(
             localAmenities: areaData.local_amenities,
             buyerIntelligence: areaData.buyer_intelligence,
             narratives: areaData.narratives,
+            areaImages: areaData.area_images || [],
+            blogContent: areaData.blog_content,
 
             // AI metadata
             confidenceScore: areaData.confidence_score,

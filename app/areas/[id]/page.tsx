@@ -5,7 +5,15 @@ import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Loader2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { AreaIntelligenceResult } from '@/lib/types/area-intelligence'
+import {
+    Carousel,
+    CarouselContent,
+    CarouselItem,
+    CarouselNext,
+    CarouselPrevious,
+} from "@/components/ui/carousel"
 
 interface Society {
     id: string
@@ -24,6 +32,8 @@ export default function AreaDetailPage() {
     const [societies, setSocieties] = useState<Society[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [showImageLightbox, setShowImageLightbox] = useState(false)
+    const [lightboxImageIndex, setLightboxImageIndex] = useState(0)
 
     useEffect(() => {
         fetchArea()
@@ -124,6 +134,43 @@ export default function AreaDetailPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Area Images Carousel */}
+                        {area.areaImages && area.areaImages.length > 0 && (
+                            <div className="bg-white rounded-lg shadow-sm border p-6">
+                                <h2 className="text-2xl font-bold text-gray-900 mb-4">Area Photos</h2>
+                                <Carousel className="w-full">
+                                    <CarouselContent>
+                                        {area.areaImages.map((imageUrl, index) => (
+                                            <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
+                                                <div className="p-1">
+                                                    <div
+                                                        className="relative aspect-video w-full overflow-hidden rounded-lg border bg-gray-100 cursor-pointer hover:opacity-90 transition-opacity"
+                                                        onClick={() => {
+                                                            setLightboxImageIndex(index);
+                                                            setShowImageLightbox(true);
+                                                        }}
+                                                    >
+                                                        <Image
+                                                            src={imageUrl}
+                                                            alt={`${area.area} - Image ${index + 1}`}
+                                                            fill
+                                                            className="object-cover"
+                                                            unoptimized
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </CarouselItem>
+                                        ))}
+                                    </CarouselContent>
+                                    <CarouselPrevious className="left-2" />
+                                    <CarouselNext className="right-2" />
+                                </Carousel>
+                                <p className="text-xs text-gray-500 mt-2 text-center">
+                                    {area.areaImages.length} area photos • Click to enlarge
+                                </p>
+                            </div>
+                        )}
 
                         {/* Overview */}
                         {area.overview && (
@@ -386,6 +433,67 @@ export default function AreaDetailPage() {
                         <Link href="/areas">
                             <Button>Back to Areas</Button>
                         </Link>
+                    </div>
+                )}
+
+                {/* Image Lightbox */}
+                {showImageLightbox && area && area.areaImages && area.areaImages.length > 0 && (
+                    <div
+                        className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+                        onClick={() => setShowImageLightbox(false)}
+                    >
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-4 right-4 text-white hover:bg-white/20"
+                            onClick={() => setShowImageLightbox(false)}
+                        >
+                            ✕
+                        </Button>
+
+                        <div className="relative w-full h-[80vh]">
+                            <Image
+                                src={area.areaImages[lightboxImageIndex]}
+                                alt={`${area.area} - Image ${lightboxImageIndex + 1}`}
+                                fill
+                                className="object-contain"
+                                unoptimized
+                            />
+                        </div>
+
+                        <div className="mt-4 text-center text-white absolute bottom-8">
+                            <p className="text-lg font-semibold">
+                                {area.area} - Image {lightboxImageIndex + 1} of {area.areaImages.length}
+                            </p>
+                        </div>
+
+                        {/* Navigation Arrows */}
+                        {area.areaImages.length > 1 && (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLightboxImageIndex((lightboxImageIndex - 1 + area.areaImages!.length) % area.areaImages!.length);
+                                    }}
+                                >
+                                    ‹
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLightboxImageIndex((lightboxImageIndex + 1) % area.areaImages!.length);
+                                    }}
+                                >
+                                    ›
+                                </Button>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

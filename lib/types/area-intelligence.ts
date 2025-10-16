@@ -139,11 +139,47 @@ export interface AreaIntelligenceResult {
     buyerIntelligence?: BuyerIntelligence;
     narratives?: AreaNarratives;
 
+    // Images (array of Supabase Storage URLs)
+    areaImages?: string[]; // Public URLs from area_images bucket
+
+    // Blog content
+    blogContent?: BlogContent;
+
     // AI metadata
     confidenceScore?: number; // 0-100
     lastAnalyzed?: string; // ISO timestamp
     dataSource?: 'claude_websearch' | 'gemini_search';
     searchQueriesUsed?: string[];
+}
+
+// ============================================================================
+// Blog Content Types
+// ============================================================================
+
+export interface BlogImage {
+    url: string;
+    thumbnail: string;
+    title: string;
+    source: string;
+}
+
+export interface BlogSection {
+    id: string;
+    heading: string;
+    content: string; // Markdown content
+    imageSearchQuery: string; // AI-generated search query for SerpAPI
+    images: BlogImage[];
+    imageCaption: string;
+}
+
+export interface BlogContent {
+    title: string;
+    metaDescription: string;
+    publishedDate: string;
+    readingTimeMinutes: number;
+    sections: BlogSection[];
+    tags: string[];
+    generatedAt: string;
 }
 
 // ============================================================================

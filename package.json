@@ -7,7 +7,10 @@
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
-        "migrate-areas": "tsx scripts/enrich-existing-areas.ts"
+        "migrate-areas": "tsx scripts/enrich-existing-areas.ts",
+        "migrate-areas-images": "tsx scripts/enrich-existing-areas.ts --images-only",
+        "generate-blogs": "tsx scripts/enrich-existing-areas.ts --generate-blogs",
+        "generate-blogs-test": "tsx scripts/enrich-existing-areas.ts --generate-blogs --limit 1"
     },
     "dependencies": {
         "@google/generative-ai": "^0.21.0",
@@ -36,10 +39,12 @@
         "@types/react": "^18.2.0",
         "@types/react-dom": "^18.2.0",
         "autoprefixer": "^10.4.0",
+        "dotenv": "^17.2.3",
         "eslint": "^8.56.0",
         "eslint-config-next": "14.1.0",
         "postcss": "^8.4.0",
         "tailwindcss": "^3.4.0",
+        "tsx": "^4.20.6",
         "typescript": "^5.3.0"
     }
 }

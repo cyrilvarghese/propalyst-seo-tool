@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
                         localAmenities: existingArea.local_amenities,
                         buyerIntelligence: existingArea.buyer_intelligence,
                         narratives: existingArea.narratives,
+                        areaImages: existingArea.area_images || [],
                         confidenceScore: existingArea.confidence_score,
                         lastAnalyzed: existingArea.last_analyzed,
                         dataSource: existingArea.data_source,
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
             local_amenities: enrichedData.localAmenities,
             buyer_intelligence: enrichedData.buyerIntelligence,
             narratives: enrichedData.narratives,
+            area_images: enrichedData.areaImages || [],
             confidence_score: enrichedData.confidenceScore,
             last_analyzed: enrichedData.lastAnalyzed,
             data_source: enrichedData.dataSource
@@ -167,6 +169,7 @@ export async function POST(request: NextRequest) {
                 localAmenities: savedArea.local_amenities,
                 buyerIntelligence: savedArea.buyer_intelligence,
                 narratives: savedArea.narratives,
+                areaImages: savedArea.area_images || [],
                 confidenceScore: savedArea.confidence_score,
                 lastAnalyzed: savedArea.last_analyzed,
                 dataSource: savedArea.data_source,

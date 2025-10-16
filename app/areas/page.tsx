@@ -21,6 +21,7 @@ interface Area {
     confidenceScore?: number
     lastAnalyzed?: string
     createdAt: string
+    blogContent?: any
 }
 
 export default function AreasPage() {
@@ -49,6 +50,9 @@ export default function AreasPage() {
     const [currentCooldownRequestId, setCurrentCooldownRequestId] = useState<string | null>(null)
     const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null)
     const [bulkStats, setBulkStats] = useState({ succeeded: 0, failed: 0, skipped: 0 })
+
+    // Blog generation state
+    const [generatingBlogFor, setGeneratingBlogFor] = useState<string | null>(null)
 
     const fetchAreas = async () => {
         setLoading(true)
@@ -347,6 +351,37 @@ export default function AreasPage() {
         setCurrentCooldownRequestId(null)
     }
 
+    // Generate blog for a single area
+    const handleGenerateBlog = async (areaId: string) => {
+        setGeneratingBlogFor(areaId)
+
+        try {
+            const response = await fetch(`/api/areas/${areaId}/generate-blog`, {
+                method: 'POST'
+            })
+
+            const data = await response.json()
+
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to generate blog')
+            }
+
+            // Update the area in the list
+            setAreas(prev => prev.map(area =>
+                area.id === areaId
+                    ? { ...area, blogContent: data.blogContent }
+                    : area
+            ))
+
+            console.log('✅ Blog generated successfully')
+        } catch (err: any) {
+            console.error('Error generating blog:', err)
+            alert(`Failed to generate blog: ${err.message}`)
+        } finally {
+            setGeneratingBlogFor(null)
+        }
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
             <div className="max-w-7xl mx-auto">
@@ -469,6 +504,7 @@ export default function AreasPage() {
                                             <TableHead>Properties</TableHead>
                                             <TableHead>Confidence</TableHead>
                                             <TableHead>Last Analyzed</TableHead>
+                                            <TableHead>Blog</TableHead>
                                             <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -533,11 +569,44 @@ export default function AreasPage() {
                                                 <TableCell className="text-sm text-gray-600">
                                                     {area.lastAnalyzed ? formatDate(area.lastAnalyzed) : 'Not analyzed'}
                                                 </TableCell>
+                                                <TableCell>
+                                                    {area.blogContent ? (
+                                                        <Link href={`/areas/${area.id}/blog`}>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-blue-600 hover:text-blue-700"
+                                                            >
+                                                                📄 View Blog
+                                                            </Button>
+                                                        </Link>
+                                                    ) : generatingBlogFor === area.id ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            disabled
+                                                            className="text-gray-500"
+                                                        >
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                            Generating...
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleGenerateBlog(area.id)}
+                                                            className="text-green-600 hover:text-green-700"
+                                                        >
+                                                            ✨ Generate Blog
+                                                        </Button>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     <Link href={`/areas/${area.id}`}>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
+                                                            title="View area details"
                                                         >
                                                             <ExternalLink className="h-4 w-4" />
                                                         </Button>
