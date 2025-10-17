@@ -248,7 +248,7 @@ export async function fetchSpecificImages(
 
                 return { img, score };
             })
-            .sort((a, b) => b.score - a.score) // Sort by quality score
+            .sort((a: { img: any; score: number }, b: { img: any; score: number }) => b.score - a.score) // Sort by quality score
             .slice(0, count) // Take top N
             .map(({ img }) => ({
                 thumbnail: img.thumbnail,
