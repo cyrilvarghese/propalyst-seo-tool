@@ -658,7 +658,7 @@ STORED IN TWO PLACES:
 2. **Gemini performs Google Search** with grounding
    ```typescript
    const model = gemini.getGenerativeModel({
-     model: 'gemini-2.0-flash-exp',
+     model: 'gemini-flash-latest',
      tools: [{ googleSearch: {} }]
    });
 

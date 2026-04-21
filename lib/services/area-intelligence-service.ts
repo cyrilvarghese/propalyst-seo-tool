@@ -198,7 +198,7 @@ IMPORTANT:
         console.log(`[AreaIntelligence:${this.searchId}] 🌐 Using Google Gemini Search`)
 
         const model = this.gemini.getGenerativeModel({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-flash-latest',
             tools: [{ googleSearch: {} }] as any
         })
 

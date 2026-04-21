@@ -55,7 +55,7 @@ export class AreaBlogService {
 
         const prompt = this.buildBlogPrompt(area)
         const model = this.gemini.getGenerativeModel({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-flash-latest',
             tools: [{ googleSearch: {} }] as any
         })
 
