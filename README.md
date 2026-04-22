@@ -43,6 +43,7 @@ GOOGLE_AI_API_KEY=your_gemini_api_key
 SERPAPI_KEY=your_serpapi_key
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ## 🏗️ Architecture
@@ -292,5 +293,3 @@ npm i -g vercel
 # Deploy
 vercel
 ```
-
- 

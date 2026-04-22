@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/utils/supabase-client'
+import { getSupabaseAdmin, supabase } from '@/lib/utils/supabase-client'
 import { AreaBlogService } from '@/lib/services/area-blog-service'
 
 export async function POST(
@@ -103,9 +103,10 @@ export async function POST(
         // Initialize blog service and generate
         const blogService = new AreaBlogService()
         const blogContent = await blogService.generateBlog(areaResult)
+        const supabaseAdmin = getSupabaseAdmin()
 
         // Save to database
-        const { error: updateError } = await supabase
+        const { error: updateError } = await supabaseAdmin
             .from('local_areas')
             .update({ blog_content: blogContent })
             .eq('id', id)

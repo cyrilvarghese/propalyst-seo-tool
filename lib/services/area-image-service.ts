@@ -8,7 +8,7 @@
  * - Returns: Array of public URLs
  */
 
-import { supabase } from '@/lib/utils/supabase-client'
+import { getSupabaseAdmin } from '@/lib/utils/supabase-client'
 import { fetchAreaImages as fetchFromSerpAPI } from '@/lib/services/serpapi-service'
 
 /**
@@ -26,20 +26,21 @@ export async function fetchAndUploadAreaImages(
     slug: string,
     count: number = 8
 ): Promise<string[]> {
-    console.log(`[AreaImages] 🖼️ Starting image fetch for: ${areaName}, ${cityName}`)
+    console.log(`[AreaImages] Starting image fetch for: ${areaName}, ${cityName}`)
 
     try {
+        const supabaseAdmin = getSupabaseAdmin()
+
         // Step 1: Check if images already exist in storage
-        const { data: existingFiles, error: listError } = await supabase.storage
+        const { data: existingFiles } = await supabaseAdmin.storage
             .from('area_images')
             .list(slug)
 
         if (existingFiles && existingFiles.length > 0) {
-            console.log(`[AreaImages] ✅ Found ${existingFiles.length} existing images, reusing them`)
+            console.log(`[AreaImages] Found ${existingFiles.length} existing images, reusing them`)
 
-            // Return existing image URLs
             const urls = existingFiles.map(file => {
-                const { data } = supabase.storage
+                const { data } = supabaseAdmin.storage
                     .from('area_images')
                     .getPublicUrl(`${slug}/${file.name}`)
                 return data.publicUrl
@@ -49,15 +50,15 @@ export async function fetchAndUploadAreaImages(
         }
 
         // Step 2: Fetch images from SerpAPI
-        console.log(`[AreaImages] 🔍 Fetching from SerpAPI...`)
+        console.log('[AreaImages] Fetching from SerpAPI...')
         const images = await fetchFromSerpAPI(areaName, cityName, count)
 
         if (images.length === 0) {
-            console.log(`[AreaImages] ⚠️ No images found from SerpAPI`)
+            console.log('[AreaImages] No images found from SerpAPI')
             return []
         }
 
-        console.log(`[AreaImages] 📥 Fetched ${images.length} images from SerpAPI`)
+        console.log(`[AreaImages] Fetched ${images.length} images from SerpAPI`)
 
         // Step 3: Download and upload each image to Supabase Storage
         const uploadedUrls: string[] = []
@@ -66,12 +67,11 @@ export async function fetchAndUploadAreaImages(
             const image = images[i]
 
             try {
-                // Download image from original URL
-                console.log(`[AreaImages] ⬇️ Downloading image ${i + 1}/${images.length}...`)
+                console.log(`[AreaImages] Downloading image ${i + 1}/${images.length}...`)
                 const response = await fetch(image.original)
 
                 if (!response.ok) {
-                    console.error(`[AreaImages] ❌ Failed to download image ${i + 1}: ${response.status}`)
+                    console.error(`[AreaImages] Failed to download image ${i + 1}: ${response.status}`)
                     continue
                 }
 
@@ -79,52 +79,45 @@ export async function fetchAndUploadAreaImages(
                 const arrayBuffer = await blob.arrayBuffer()
                 const buffer = Buffer.from(arrayBuffer)
 
-                // Determine file extension from content type
                 const contentType = response.headers.get('content-type') || 'image/jpeg'
                 const extension = contentType.includes('png') ? 'png' : 'jpg'
                 const fileName = `image-${i + 1}.${extension}`
                 const filePath = `${slug}/${fileName}`
 
-                // Upload to Supabase Storage
-                console.log(`[AreaImages] ⬆️ Uploading to: ${filePath}`)
-                const { data: uploadData, error: uploadError } = await supabase.storage
+                console.log(`[AreaImages] Uploading to: ${filePath}`)
+                const { error: uploadError } = await supabaseAdmin.storage
                     .from('area_images')
                     .upload(filePath, buffer, {
                         contentType,
                         cacheControl: '3600',
-                        upsert: true // Overwrite if exists
+                        upsert: true
                     })
 
                 if (uploadError) {
-                    console.error(`[AreaImages] ❌ Upload failed for image ${i + 1}:`, uploadError.message)
+                    console.error(`[AreaImages] Upload failed for image ${i + 1}:`, uploadError.message)
                     continue
                 }
 
-                // Get public URL
-                const { data: urlData } = supabase.storage
+                const { data: urlData } = supabaseAdmin.storage
                     .from('area_images')
                     .getPublicUrl(filePath)
 
                 uploadedUrls.push(urlData.publicUrl)
-                console.log(`[AreaImages] ✅ Uploaded image ${i + 1}/${images.length}`)
+                console.log(`[AreaImages] Uploaded image ${i + 1}/${images.length}`)
 
-                // Rate limiting: 500ms delay between uploads
                 if (i < images.length - 1) {
                     await sleep(500)
                 }
-
             } catch (error: any) {
-                console.error(`[AreaImages] ❌ Error processing image ${i + 1}:`, error.message)
-                continue
+                console.error(`[AreaImages] Error processing image ${i + 1}:`, error.message)
             }
         }
 
-        console.log(`[AreaImages] 🎉 Successfully uploaded ${uploadedUrls.length}/${images.length} images`)
+        console.log(`[AreaImages] Successfully uploaded ${uploadedUrls.length}/${images.length} images`)
         return uploadedUrls
-
     } catch (error: any) {
-        console.error(`[AreaImages] ❌ Fatal error:`, error.message)
-        return [] // Non-blocking: Return empty array on failure
+        console.error('[AreaImages] Fatal error:', error.message)
+        return []
     }
 }
 
@@ -136,7 +129,8 @@ export async function fetchAndUploadAreaImages(
  */
 export async function deleteAreaImages(slug: string): Promise<number> {
     try {
-        const { data: files, error: listError } = await supabase.storage
+        const supabaseAdmin = getSupabaseAdmin()
+        const { data: files, error: listError } = await supabaseAdmin.storage
             .from('area_images')
             .list(slug)
 
@@ -146,27 +140,23 @@ export async function deleteAreaImages(slug: string): Promise<number> {
 
         const filePaths = files.map(file => `${slug}/${file.name}`)
 
-        const { error: deleteError } = await supabase.storage
+        const { error: deleteError } = await supabaseAdmin.storage
             .from('area_images')
             .remove(filePaths)
 
         if (deleteError) {
-            console.error(`[AreaImages] ❌ Failed to delete images:`, deleteError.message)
+            console.error('[AreaImages] Failed to delete images:', deleteError.message)
             return 0
         }
 
-        console.log(`[AreaImages] 🗑️ Deleted ${filePaths.length} images for ${slug}`)
+        console.log(`[AreaImages] Deleted ${filePaths.length} images for ${slug}`)
         return filePaths.length
-
     } catch (error: any) {
-        console.error(`[AreaImages] ❌ Error deleting images:`, error.message)
+        console.error('[AreaImages] Error deleting images:', error.message)
         return 0
     }
 }
 
-/**
- * Sleep utility
- */
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
 }

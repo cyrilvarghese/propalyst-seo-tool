@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/utils/supabase-client'
+import { getSupabaseAdmin, supabase } from '@/lib/utils/supabase-client'
 import { AreaIntelligenceService } from '@/lib/services/area-intelligence-service'
 import { generateAreaSlug } from '@/lib/utils/area-helpers'
 
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         console.log(`[Area Search] 🔍 Looking up city: "${cityName}"`)
 
         let cityData = null
+        const supabaseAdmin = getSupabaseAdmin()
 
         // Try to find existing city
         const { data: existingCity } = await supabase
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
             // City doesn't exist - create it
             console.log(`[Area Search] 🆕 City not found, creating: "${cityName}"`)
 
-            const { data: newCity, error: createError } = await supabase
+            const { data: newCity, error: createError } = await supabaseAdmin
                 .from('cities')
                 .insert({ name: cityName })
                 .select('id')
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
 
         // Upsert to database (update if exists, insert if not)
         // NOTE: Using city_id,area as conflict target because that's the unique constraint
-        const { data: savedArea, error: saveError } = await supabase
+        const { data: savedArea, error: saveError } = await supabaseAdmin
             .from('local_areas')
             .upsert(areaRecord, {
                 onConflict: 'city_id,area',
