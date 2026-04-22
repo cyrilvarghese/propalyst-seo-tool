@@ -28,11 +28,12 @@ export async function POST(request: NextRequest) {
         if (!skipCache) {
             console.log(`[Area Search] 🔎 Checking cache for slug: ${slug}`)
 
-            const { data: existingArea } = await supabase
+            const existingAreaResponse = await supabase
                 .from('local_areas')
                 .select('*, cities(name)')
                 .eq('slug', slug)
                 .single()
+            const existingArea = existingAreaResponse.data as any
 
             if (existingArea && existingArea.last_analyzed) {
                 console.log(`[Area Search] ✅ Found in cache: ${slug}`)
@@ -80,11 +81,12 @@ export async function POST(request: NextRequest) {
         const supabaseAdmin = getSupabaseAdmin()
 
         // Try to find existing city
-        const { data: existingCity } = await supabase
+        const existingCityResponse = await supabase
             .from('cities')
             .select('id')
             .ilike('name', cityName)
             .single()
+        const existingCity = existingCityResponse.data as any
 
         if (existingCity) {
             cityData = existingCity
@@ -93,11 +95,13 @@ export async function POST(request: NextRequest) {
             // City doesn't exist - create it
             console.log(`[Area Search] 🆕 City not found, creating: "${cityName}"`)
 
-            const { data: newCity, error: createError } = await supabaseAdmin
+            const newCityResponse = await supabaseAdmin
                 .from('cities')
                 .insert({ name: cityName })
                 .select('id')
                 .single()
+            const newCity = newCityResponse.data as any
+            const createError = newCityResponse.error
 
             if (createError || !newCity) {
                 console.error(`[Area Search] ❌ Failed to create city:`, createError)
@@ -132,14 +136,16 @@ export async function POST(request: NextRequest) {
 
         // Upsert to database (update if exists, insert if not)
         // NOTE: Using city_id,area as conflict target because that's the unique constraint
-        const { data: savedArea, error: saveError } = await supabaseAdmin
+        const savedAreaResponse = await supabaseAdmin
             .from('local_areas')
-            .upsert(areaRecord, {
+            .upsert(areaRecord as any, {
                 onConflict: 'city_id,area',
                 ignoreDuplicates: false
             })
             .select('*, cities(name)')
             .single()
+        const savedArea = savedAreaResponse.data as any
+        const saveError = savedAreaResponse.error
 
         if (saveError) {
             console.error('[Area Search] ❌ Failed to save:', saveError)

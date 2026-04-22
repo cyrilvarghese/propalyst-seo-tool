@@ -17,7 +17,7 @@ export async function POST(
         console.log(`[Generate Blog API] 📝 Starting blog generation for area: ${id}`)
 
         // Fetch area with all enriched data
-        const { data: areaData, error: areaError } = await supabase
+        const areaResponse = await supabase
             .from('local_areas')
             .select(`
                 id,
@@ -41,6 +41,8 @@ export async function POST(
             `)
             .eq('id', id)
             .single()
+        const areaData = areaResponse.data as any
+        const areaError = areaResponse.error
 
         if (areaError || !areaData) {
             console.error('[Generate Blog API] ❌ Area not found:', areaError)
@@ -60,11 +62,12 @@ export async function POST(
         }
 
         // Check if blog already exists
-        const { data: existingBlog } = await supabase
+        const existingBlogResponse = await supabase
             .from('local_areas')
             .select('blog_content')
             .eq('id', id)
             .single()
+        const existingBlog = existingBlogResponse.data as any
 
         if (existingBlog?.blog_content) {
             console.log('[Generate Blog API] ℹ️ Blog already exists, returning existing')
@@ -108,7 +111,7 @@ export async function POST(
         // Save to database
         const { error: updateError } = await supabaseAdmin
             .from('local_areas')
-            .update({ blog_content: blogContent })
+            .update({ blog_content: blogContent as any })
             .eq('id', id)
 
         if (updateError) {

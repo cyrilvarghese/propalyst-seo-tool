@@ -112,11 +112,13 @@ async function performPropertySearch(
     if (!property) {
         // Fallback: fetch from Supabase
         console.log(`[Bulk Search] Property not in filesystem, fetching from Supabase: ${slug}`)
-        const { data, error } = await supabase
+        const response = await supabase
             .from('society')
             .select('*')
             .eq('slug', slug)
             .single()
+        const data = response.data as any
+        const error = response.error
 
         if (error || !data) {
             throw new Error(`Property not found in storage after search: ${query}`)
@@ -257,11 +259,13 @@ export async function POST(request: NextRequest) {
                         // Fetch the saved property from Supabase to send to frontend
                         console.log(`[Bulk Search:${requestId}] 📥 Fetching saved property from Supabase...`)
                         const slug = storage.generateSlug(society)
-                        const { data: savedProperty, error: fetchError } = await supabase
+                        const savedPropertyResponse = await supabase
                             .from('society')
                             .select('*')
                             .eq('slug', slug)
                             .single()
+                        const savedProperty = savedPropertyResponse.data as any
+                        const fetchError = savedPropertyResponse.error
 
                         if (fetchError || !savedProperty) {
                             console.error(`[Bulk Search:${requestId}] ⚠️ Could not fetch property:`, fetchError?.message)

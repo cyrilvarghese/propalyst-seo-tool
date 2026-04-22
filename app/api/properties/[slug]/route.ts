@@ -9,11 +9,13 @@ export async function GET(
     console.log(`[Property API] 📋 Fetching property with slug: ${slug}`)
 
     try {
-        const { data, error } = await supabase
+        const response = await supabase
             .from('society')
             .select('*')
             .eq('slug', slug)
             .single()
+        const data = response.data as any
+        const error = response.error
 
         if (error) {
             console.error('[Property API] ❌ Error fetching property:', error)

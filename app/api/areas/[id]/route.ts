@@ -16,7 +16,7 @@ export async function GET(
         console.log(`[Area API] 📋 Fetching area: ${id}`)
 
         // Fetch area with all enriched data
-        const { data: areaData, error: areaError } = await supabase
+        const areaResponse = await supabase
             .from('local_areas')
             .select(`
                 *,
@@ -27,6 +27,8 @@ export async function GET(
             `)
             .eq('id', id)
             .single()
+        const areaData = areaResponse.data as any
+        const areaError = areaResponse.error
 
         if (areaError || !areaData) {
             console.error('[Area API] ❌ Area not found:', areaError)

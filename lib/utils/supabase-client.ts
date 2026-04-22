@@ -8,7 +8,8 @@
 
 import 'server-only'
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/types/supabase'
 
 const supabaseUrl = process.env.SUPABASE_URL || 'https://ayxhtlzyhpsjykxxnqqh.supabase.co'
 const supabaseKey = process.env.SUPABASE_KEY || 'sb_publishable_wsYTO6mIpSbbFvrbdKS_yA_40dZmY2B'
@@ -21,9 +22,9 @@ const clientOptions = {
     }
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, clientOptions)
+const supabase = createClient<Database>(supabaseUrl, supabaseKey, clientOptions)
 
-let supabaseAdmin: ReturnType<typeof createClient> | null = null
+let supabaseAdmin: SupabaseClient<Database> | null = null
 
 export function hasSupabaseServiceRoleKey(): boolean {
     return Boolean(supabaseServiceRoleKey)
@@ -38,7 +39,7 @@ export function getSupabaseAdmin() {
     }
 
     if (!supabaseAdmin) {
-        supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, clientOptions)
+        supabaseAdmin = createClient<Database>(supabaseUrl, supabaseServiceRoleKey, clientOptions)
     }
 
     return supabaseAdmin

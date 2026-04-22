@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
         console.log('[Areas API] 📋 Fetching all areas from database...')
 
         // Fetch all areas with JOIN to cities table
-        const { data, error } = await supabase
+        const response = await supabase
             .from('local_areas')
             .select(`
                 id,
@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
                 )
             `)
             .order('property_count', { ascending: false })
+        const data = response.data as any[]
+        const error = response.error
 
         if (error) {
             console.error('[Areas API] ❌ Database error:', error)
