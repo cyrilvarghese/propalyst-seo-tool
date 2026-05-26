@@ -56,7 +56,13 @@ export class AreaBlogService {
         const prompt = this.buildBlogPrompt(area)
         const model = this.gemini.getGenerativeModel({
             model: 'gemini-flash-latest',
-            tools: [{ googleSearch: {} }] as any
+            tools: [{ googleSearch: {} }] as any,
+            generationConfig: {
+                maxOutputTokens: 16384,
+                thinkingConfig: {
+                    thinkingLevel: 'minimal',
+                },
+            } as any,
         })
 
         const result = await model.generateContent(prompt)

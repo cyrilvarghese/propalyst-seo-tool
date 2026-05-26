@@ -840,8 +840,10 @@ Return ONLY the JSON object, no extra text.`;
                         google_search: {}  // Enable Google Search grounding
                     }],
                     generationConfig: {
-                        temperature: 0.2,  // Lower temperature for consistency
-                        maxOutputTokens: 4096,
+                        maxOutputTokens: 16384,
+                        thinkingConfig: {
+                            thinkingLevel: 'minimal',
+                        },
                     }
                 })
             }
@@ -853,7 +855,8 @@ Return ONLY the JSON object, no extra text.`;
         }
 
         const data = await response.json();
-        console.log(`[Gemini:${requestId}] 📄 Response received`);
+        const finishReason = data.candidates?.[0]?.finishReason;
+        console.log(`[Gemini:${requestId}] 📄 Response received - finishReason: ${finishReason}`);
 
         // Extract text from Gemini's response format
         let aiResponse = '';
