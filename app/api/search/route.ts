@@ -43,9 +43,6 @@ export async function POST(request: NextRequest) {
     console.log(`[API:${requestId}] SUPABASE_KEY:`, process.env.SUPABASE_KEY ? `${process.env.SUPABASE_KEY.substring(0, 20)}...` : '❌ NOT DEFINED');
     console.log(`[API:${requestId}] ANTHROPIC_API_KEY:`, process.env.ANTHROPIC_API_KEY ? 'Defined' : '❌ NOT DEFINED');
     console.log(`[API:${requestId}] SERPAPI_KEY:`, process.env.SERPAPI_KEY ? 'Defined' : '❌ NOT DEFINED');
-    // Masked preview to verify the EXACT value the running process sees (compare against local: len 39, AIzaSy...._hxI)
-    const gkey = process.env.GOOGLE_AI_API_KEY;
-    console.log(`[API:${requestId}] GOOGLE_AI_API_KEY:`, gkey ? `len=${gkey.length} preview=${gkey.substring(0, 6)}...${gkey.slice(-4)}` : '❌ NOT DEFINED');
 
     try {
         // Parse request body
