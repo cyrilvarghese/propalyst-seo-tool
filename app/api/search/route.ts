@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import {
     IntelligentSearchResponse,
     IntelligentPropertyResult,
@@ -43,6 +44,11 @@ export async function POST(request: NextRequest) {
     console.log(`[API:${requestId}] SUPABASE_KEY:`, process.env.SUPABASE_KEY ? `${process.env.SUPABASE_KEY.substring(0, 20)}...` : '❌ NOT DEFINED');
     console.log(`[API:${requestId}] ANTHROPIC_API_KEY:`, process.env.ANTHROPIC_API_KEY ? 'Defined' : '❌ NOT DEFINED');
     console.log(`[API:${requestId}] SERPAPI_KEY:`, process.env.SERPAPI_KEY ? 'Defined' : '❌ NOT DEFINED');
+    // SHA-256 hash (one-way, safe to log) to compare Render's key value against local byte-for-byte
+    const gkey = process.env.GOOGLE_AI_API_KEY;
+    console.log(`[API:${requestId}] GOOGLE_AI_API_KEY:`, gkey
+        ? `len=${gkey.length} sha256=${createHash('sha256').update(gkey).digest('hex')}`
+        : '❌ NOT DEFINED');
 
     try {
         // Parse request body
