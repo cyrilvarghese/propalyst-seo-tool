@@ -49,6 +49,15 @@ export async function POST(request: NextRequest) {
     console.log(`[API:${requestId}] GOOGLE_AI_API_KEY:`, gkey
         ? `len=${gkey.length} sha256=${createHash('sha256').update(gkey).digest('hex')}`
         : '❌ NOT DEFINED');
+    // Log this service's actual outbound IP so we can confirm it falls within Render's
+    // published ranges (74.220.48.0/24, 74.220.56.0/24) before whitelisting in Google Cloud.
+    try {
+        const ipResp = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResp.json();
+        console.log(`[API:${requestId}] OUTBOUND_IP:`, ipData.ip);
+    } catch (e) {
+        console.log(`[API:${requestId}] OUTBOUND_IP: lookup failed`, e);
+    }
 
     try {
         // Parse request body
