@@ -948,7 +948,10 @@ Return ONLY the JSON object, no extra text.`;
 
     } catch (error) {
         console.error(`[Gemini:${requestId}] ❌ Search failed:`, error);
-        return null;
+        // Re-throw so the real upstream error (e.g. "Gemini API error 400: ...")
+        // surfaces to the client instead of the generic "no data" message.
+        // Validation failures still return null above (legitimate "no results").
+        throw error;
     }
 }
 
