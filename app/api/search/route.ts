@@ -857,7 +857,7 @@ Return ONLY the JSON object, no extra text.`;
                     generationConfig: {
                         maxOutputTokens: 16384,
                         thinkingConfig: {
-                            thinkingLevel: 'minimal',
+                            thinkingLevel: 'low',
                         },
                     }
                 })

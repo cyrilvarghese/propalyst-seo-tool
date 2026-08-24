@@ -60,7 +60,7 @@ export class AreaBlogService {
             generationConfig: {
                 maxOutputTokens: 16384,
                 thinkingConfig: {
-                    thinkingLevel: 'minimal',
+                    thinkingLevel: 'low',
                 },
             } as any,
         })
