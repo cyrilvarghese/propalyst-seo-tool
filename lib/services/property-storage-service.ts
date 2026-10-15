@@ -1,23 +1,42 @@
 /**
  * Property Storage Service
- * Handles dual storage: filesystem JSON + Supabase database
+ * Persists property intelligence to the Supabase `society` table.
  *
- * Next.js API routes run on the server, so we can write to the filesystem for
- * local cache and also persist to Supabase for the app UI.
+ * Supabase is the only store. The app runs on Cloudflare Workers, which has no
+ * writable filesystem, so there is no local JSON cache.
  */
 
-import fs from 'fs/promises'
-import path from 'path'
 import { IntelligentPropertyResult } from '@/lib/types/property-intelligence'
-import { getSupabaseAdmin } from '@/lib/utils/supabase-client'
+import { getSupabaseAdmin, supabase } from '@/lib/utils/supabase-client'
+
+/**
+ * Transform a Supabase `society` record to IntelligentPropertyResult format
+ */
+export function transformDbToProperty(dbRecord: any): IntelligentPropertyResult {
+    return {
+        id: dbRecord.id,
+        title: dbRecord.name,
+        description: dbRecord.description,
+        specifications: dbRecord.specifications || {},
+        location: dbRecord.location || {},
+        community: dbRecord.community || {},
+        market: dbRecord.market || {},
+        narratives: dbRecord.narratives || {},
+        confidenceScore: dbRecord.confidence_score || 0,
+        analysisDepth: 'detailed', // Default depth for stored properties
+        sourceUrl: dbRecord.source_url,
+        sourceName: dbRecord.source_name,
+        lastAnalyzed: dbRecord.last_analyzed,
+        searchScore: dbRecord.search_score || 0,
+        sourceAnalyses: dbRecord.source_analyses || [],
+        sourceCitations: dbRecord.source_citations || [],
+        propertyImages: dbRecord.property_images || [],
+        // Used by the search route to decide whether the cache is fresh
+        ...({ storedAt: dbRecord.stored_at, slug: dbRecord.slug } as any)
+    }
+}
 
 export class PropertyStorageService {
-    private readonly storageDir: string
-
-    constructor() {
-        this.storageDir = path.join(process.cwd(), 'data', 'properties')
-    }
-
     /**
      * Generate URL-safe slug from property name
      */
@@ -30,19 +49,7 @@ export class PropertyStorageService {
     }
 
     /**
-     * Ensure storage directory exists
-     */
-    private async ensureStorageDir(): Promise<void> {
-        try {
-            await fs.access(this.storageDir)
-        } catch {
-            await fs.mkdir(this.storageDir, { recursive: true })
-            console.log(`[Storage] Created storage directory: ${this.storageDir}`)
-        }
-    }
-
-    /**
-     * Sync property to Supabase database.
+     * Upsert property to Supabase.
      *
      * The live `society` table is protected by RLS, so server-side writes must
      * go through the service-role client.
@@ -101,26 +108,11 @@ export class PropertyStorageService {
     }
 
     /**
-     * Store property intelligence as JSON file + sync to Supabase
+     * Store property intelligence in Supabase
      */
     async storeProperty(property: IntelligentPropertyResult): Promise<string> {
-        await this.ensureStorageDir()
-
         const slug = this.generateSlug(property.title)
-        const filename = `${slug}.json`
-        const filepath = path.join(this.storageDir, filename)
-
-        const storedData = {
-            ...property,
-            storedAt: new Date().toISOString(),
-            slug
-        }
-
-        await fs.writeFile(filepath, JSON.stringify(storedData, null, 2), 'utf-8')
-        console.log(`[Storage] Stored property: ${filename}`)
-
-        await this.syncToSupabase(storedData, slug)
-
+        await this.syncToSupabase(property, slug)
         return slug
     }
 
@@ -128,32 +120,19 @@ export class PropertyStorageService {
      * Get property by slug
      */
     async getPropertyBySlug(slug: string): Promise<IntelligentPropertyResult | null> {
-        try {
-            const filepath = path.join(this.storageDir, `${slug}.json`)
-            const data = await fs.readFile(filepath, 'utf-8')
-            const property = JSON.parse(data)
+        const { data, error } = await supabase
+            .from('society')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle()
 
-            console.log(`[Storage] Retrieved property: ${slug}`)
-            return property
-        } catch {
+        if (error || !data) {
             console.log(`[Storage] Property not found: ${slug}`)
             return null
         }
-    }
 
-    /**
-     * Check if property exists in cache
-     */
-    async propertyExists(title: string): Promise<boolean> {
-        const slug = this.generateSlug(title)
-        const filepath = path.join(this.storageDir, `${slug}.json`)
-
-        try {
-            await fs.access(filepath)
-            return true
-        } catch {
-            return false
-        }
+        console.log(`[Storage] Retrieved property: ${slug}`)
+        return transformDbToProperty(data)
     }
 
     /**
@@ -162,52 +141,6 @@ export class PropertyStorageService {
     async getCachedProperty(title: string): Promise<IntelligentPropertyResult | null> {
         const slug = this.generateSlug(title)
         return this.getPropertyBySlug(slug)
-    }
-
-    /**
-     * List all cached properties
-     */
-    async listCachedProperties(): Promise<string[]> {
-        try {
-            await this.ensureStorageDir()
-            const files = await fs.readdir(this.storageDir)
-            return files
-                .filter(f => f.endsWith('.json'))
-                .map(f => f.replace('.json', ''))
-        } catch {
-            return []
-        }
-    }
-
-    /**
-     * Delete cached property
-     */
-    async deleteProperty(slug: string): Promise<boolean> {
-        try {
-            const filepath = path.join(this.storageDir, `${slug}.json`)
-            await fs.unlink(filepath)
-            console.log(`[Storage] Deleted property: ${slug}`)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    /**
-     * Check cache age and determine if refresh needed
-     */
-    async shouldRefreshCache(title: string, maxAgeHours: number = 24): Promise<boolean> {
-        const property = await this.getCachedProperty(title)
-
-        if (!property) return true
-
-        const storedAt = (property as any).storedAt
-        if (!storedAt) return true
-
-        const cacheAge = Date.now() - new Date(storedAt).getTime()
-        const maxAge = maxAgeHours * 60 * 60 * 1000
-
-        return cacheAge > maxAge
     }
 }
 

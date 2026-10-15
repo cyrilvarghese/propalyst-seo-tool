@@ -1,6 +1,12 @@
 import { getSupabaseAdmin, hasSupabaseServiceRoleKey } from '@/lib/utils/supabase-client'
 
 export async function GET() {
+    // Writes a junk row to the live table, so it must never run in production
+    // (including the build-time prerender, which also runs as production).
+    if (process.env.NODE_ENV === 'production') {
+        return new Response('Not found', { status: 404 })
+    }
+
     console.log('[Test API] Testing Supabase INSERT into society table...')
 
     try {

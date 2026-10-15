@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server'
 import { getPropertyStorage } from '@/lib/services/property-storage-service'
-import { IntelligentPropertyResult } from '@/lib/types/property-intelligence'
 import { supabase } from '@/lib/utils/supabase-client'
 import { POST as searchHandler } from '../search/route'
 import { pendingCooldowns } from '@/lib/utils/cooldown-manager'
@@ -39,96 +38,6 @@ async function parseFileToArray(file: File): Promise<string[]> {
     }
 
     throw new Error('Unsupported file format. Please upload .json, .csv, or .txt file')
-}
-
-/**
- * Transform Supabase database record to IntelligentPropertyResult format
- */
-function transformDbToProperty(dbRecord: any): IntelligentPropertyResult {
-    return {
-        id: dbRecord.id,
-        title: dbRecord.name,
-        description: dbRecord.description,
-        specifications: dbRecord.specifications || {},
-        location: dbRecord.location || {},
-        community: dbRecord.community || {},
-        market: dbRecord.market || {},
-        narratives: dbRecord.narratives || {},
-        confidenceScore: dbRecord.confidence_score || 0,
-        analysisDepth: 'detailed', // Default depth for stored properties
-        sourceUrl: dbRecord.source_url,
-        sourceName: dbRecord.source_name,
-        lastAnalyzed: dbRecord.last_analyzed,
-        searchScore: dbRecord.search_score || 0,
-        sourceAnalyses: dbRecord.source_analyses || [],
-        sourceCitations: dbRecord.source_citations || [],
-        propertyImages: dbRecord.property_images || []
-    }
-}
-
-/**
- * Perform property search by calling /api/search and fetching from storage after completion
- */
-async function performPropertySearch(
-    query: string,
-    provider: 'claude' | 'gemini'
-): Promise<IntelligentPropertyResult> {
-    // Step 1: Call the search API (does AI analysis, images, saves to storage)
-    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            query,
-            provider,
-            skipCache: false,
-            options: { maxResults: 1, analysisDepth: 'detailed' }
-        })
-    })
-
-    if (!response.ok) {
-        throw new Error(`Search failed: ${response.statusText}`)
-    }
-
-    // Step 2: Consume the stream (just wait for completion, don't parse chunks)
-    const reader = response.body?.getReader()
-    if (!reader) {
-        throw new Error('Response body is not readable')
-    }
-
-    // Just consume the stream until it's done
-    while (true) {
-        const { done } = await reader.read()
-        if (done) break
-    }
-
-    // Step 3: After search completes, fetch property from storage
-    // The search API has already saved it to filesystem + Supabase
-    const storage = getPropertyStorage()
-    const slug = storage.generateSlug(query)
-
-    // Try filesystem first (faster)
-    let property = await storage.getPropertyBySlug(slug)
-
-    if (!property) {
-        // Fallback: fetch from Supabase
-        console.log(`[Bulk Search] Property not in filesystem, fetching from Supabase: ${slug}`)
-        const response = await supabase
-            .from('society')
-            .select('*')
-            .eq('slug', slug)
-            .single()
-        const data = response.data as any
-        const error = response.error
-
-        if (error || !data) {
-            throw new Error(`Property not found in storage after search: ${query}`)
-        }
-
-        // Transform DB record to property format
-        property = transformDbToProperty(data)
-    }
-
-    return property
 }
 
 /**

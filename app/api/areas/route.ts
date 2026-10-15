@@ -6,6 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/utils/supabase-client'
 
+// Always query Supabase at request time; without this Next prerenders the
+// response at build time and the list never updates.
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
     try {
         console.log('[Areas API] 📋 Fetching all areas from database...')
