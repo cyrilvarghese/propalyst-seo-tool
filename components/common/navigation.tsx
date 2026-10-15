@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 
 export function Navigation() {
     const [userEmail, setUserEmail] = useState('')
@@ -14,8 +15,9 @@ export function Navigation() {
         setUserEmail(email)
     }, [])
 
-    const handleLogout = () => {
-        // Clear authentication data
+    const handleLogout = async () => {
+        // End the Supabase session (clears its cookies), then the UI state
+        await createSupabaseBrowserClient().auth.signOut().catch(() => {})
         localStorage.removeItem('isAuthenticated')
         localStorage.removeItem('userEmail')
 

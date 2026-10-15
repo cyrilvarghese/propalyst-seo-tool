@@ -1,17 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 
-// Dummy credentials for demo
-const DEMO_CREDENTIALS = {
-    email: 'demo@propalyst.com',
-    password: 'password123'
-}
+const NOT_ADMIN_MESSAGE = 'This account does not have admin access. Ask an admin to add the admin role to your profile.'
 
 export function LoginForm({
     className,
@@ -23,24 +20,46 @@ export function LoginForm({
     const [isLoading, setIsLoading] = useState(false)
     const router = useRouter()
 
+    // Middleware sends signed-in non-admins back here with ?error=not-admin
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('error') === 'not-admin') {
+            setError(NOT_ADMIN_MESSAGE)
+        }
+    }, [])
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsLoading(true)
         setError('')
 
-        // Simulate authentication delay (like a real API call)
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        try {
+            // Same Supabase accounts as the main Propalyst app. The session is
+            // stored in cookies, which middleware checks on every request.
+            const supabase = createSupabaseBrowserClient()
+            const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
-        // Check dummy credentials
-        if (email === DEMO_CREDENTIALS.email && password === DEMO_CREDENTIALS.password) {
-            // Store simple auth state in localStorage (demo only)
+            if (signInError) {
+                setError(signInError.message)
+                setIsLoading(false)
+                return
+            }
+
+            // Only admins (admin token in profiles.role) may use this tool
+            const { data: isAdmin } = await supabase.rpc('is_admin')
+            if (isAdmin !== true) {
+                await supabase.auth.signOut()
+                setError(NOT_ADMIN_MESSAGE)
+                setIsLoading(false)
+                return
+            }
+
+            // UI-only state for the nav and client guards; access control is middleware
             localStorage.setItem('isAuthenticated', 'true')
             localStorage.setItem('userEmail', email)
-
-            // Redirect to home page using Next.js router
             router.push('/')
-        } else {
-            setError('Invalid credentials. Use demo@propalyst.com / password123')
+            router.refresh()
+        } catch {
+            setError('Could not reach the server. Try again.')
         }
 
         setIsLoading(false)
@@ -51,16 +70,8 @@ export function LoginForm({
             <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">Login to your account</h1>
                 <p className="text-muted-foreground text-sm text-balance">
-                    Enter your email below to login to your account
+                    Sign in with your Propalyst admin account
                 </p>
-                {/* Demo credentials hint */}
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <p className="text-blue-800 text-xs">
-                        <strong>Demo credentials:</strong><br />
-                        Email: demo@propalyst.com<br />
-                        Password: password123
-                    </p>
-                </div>
             </div>
             <div className="grid gap-6">
                 {error && (
@@ -73,7 +84,7 @@ export function LoginForm({
                     <Input
                         id="email"
                         type="email"
-                        placeholder="demo@propalyst.com"
+                        placeholder="you@propalyst.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
@@ -86,7 +97,6 @@ export function LoginForm({
                     <Input
                         id="password"
                         type="password"
-                        placeholder="password123"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
