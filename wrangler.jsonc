@@ -1,0 +1,38 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "propalyst-society-seo",
+	// Naresh's Cloudflare account
+	"account_id": "65c7f920f0fa151e6e8b646fdd89020b",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2025-12-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference service binding, the service name must match the worker name
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "propalyst-society-seo"
+		}
+	],
+	// Only reachable on the custom domain: no *.workers.dev or preview URLs
+	"workers_dev": false,
+	"preview_urls": false,
+	"routes": [
+		{ "pattern": "society-seo.propalyst.com", "custom_domain": true }
+	],
+	// Run in a fixed region instead of the visitor's nearest colo. Anthropic
+	// returns 403 "Request not allowed" for calls leaving the SIN colo.
+	"placement": {
+		"region": "aws:ap-south-1"
+	},
+	"observability": {
+		"enabled": true
+	},
+	// Non-secret config. Secrets (API keys) are set with `wrangler secret put`.
+	"vars": {
+		"SUPABASE_URL": "https://ayxhtlzyhpsjykxxnqqh.supabase.co"
+	}
+}
