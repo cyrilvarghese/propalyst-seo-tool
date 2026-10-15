@@ -10,12 +10,14 @@ IMPORTANT: This is a Next.js learning project. Always explain:
 ## Bash Commands
 - `npm install` - Install dependencies
 - `npm run dev` - Start development server (http://localhost:3000)
+- `npm run deploy` - Build with OpenNext and deploy to Cloudflare Workers (https://society-seo.propalyst.com)
+- `npx wrangler secret put <NAME>` - Set a production secret (API keys live as Worker secrets, not in `wrangler.jsonc`)
 - `npx shadcn@latest add <component>` - Add UI component
 
 ## Project Setup
 1. Copy `.env.example` to `.env.local`
 2. Add required API keys (see Environment Variables below)
-3. Login: `demo@propalyst.com` / `password123`
+3. Login: your Supabase account from the main Propalyst app. Only admins (`admin` token in `profiles.role`, checked with the `is_admin()` DB function) get in. `middleware.ts` enforces this on every page and API
 
 ## Environment Variables
 ```env
@@ -30,14 +32,15 @@ SUPABASE_KEY=xxx               # Supabase anon key
 ```
 
 ## Architecture Overview
-**Mission**: Search property name → AI extracts data from web → Save to filesystem + database → Display comprehensive profile
+**Mission**: Search property name → AI extracts data from web → Save to Supabase → Display comprehensive profile
 
 **Tech Stack**:
 - Next.js 14 (App Router)
 - TypeScript
 - Tailwind CSS
 - shadcn/ui components
-- Dual storage: Filesystem (cache) + Supabase (persistence)
+- Storage: Supabase only (Cloudflare Workers has no writable filesystem)
+- Hosting: Cloudflare Workers via `@opennextjs/cloudflare` (pinned to 1.15.1, the last release supporting Next 14), on Naresh's Cloudflare account
 
 ## Critical Rules
 
@@ -68,7 +71,7 @@ SUPABASE_KEY=xxx               # Supabase anon key
 - `app/api/properties/[slug]/route.ts` - Fetch by slug
 
 ### Services
-- `lib/services/property-storage-service.ts` - Dual storage (filesystem + Supabase)
+- `lib/services/property-storage-service.ts` - Supabase storage for the `society` table
   - `storeProperty()` - Saves to both locations
   - `syncToSupabase()` - Syncs to database
   - `generateSlug()` - Creates URL-safe identifier
@@ -91,7 +94,7 @@ SUPABASE_KEY=xxx               # Supabase anon key
 ```
 User searches "Embassy Lake Terraces"
   ↓
-Check cache: data/properties/embassy-lake-terraces.json
+Check cache: society row with slug embassy-lake-terraces (fresh if stored_at < 24h)
   ↓ (if not cached)
 AI Analysis:
   - Claude: 5-7 web searches → Extract structured data + 9 narratives
@@ -99,9 +102,7 @@ AI Analysis:
   ↓
 Fetch Images: SerpAPI → 8 photos (interior + exterior)
   ↓
-Save to:
-  1. Filesystem: data/properties/[slug].json
-  2. Supabase: society table (upsert by slug)
+Save to Supabase: society table (upsert by slug)
   ↓
 Stream response to client
   ↓
@@ -125,11 +126,8 @@ Show summary
 
 ## Storage Strategy
 
-### Filesystem (Fast Cache)
-- **Location**: `data/properties/[slug].json`
 - **Slug**: "Sobha Indraprastha" → "sobha-indraprastha"
-- **Contains**: Complete property object with images, citations
-- **Used for**: Cache hits, instant results
+- **Cache**: a row whose `stored_at` is under 24h old is returned without re-running the AI search
 
 ### Supabase (Persistent Database)
 - **Table**: `society`
@@ -177,7 +175,7 @@ Show summary
 
 ### Caching Strategy
 - **First search**: 20-30 seconds (AI + images)
-- **Cached search**: < 1 second (read from filesystem)
+- **Cached search**: ~1 second (read from Supabase)
 - **Cache duration**: 24 hours (configurable)
 
 ## AI Providers
@@ -221,7 +219,7 @@ Show summary
 - Check if `propertyImages` array is populated
 
 ### Supabase Sync Failed
-- Non-blocking: Property still saved to filesystem
+- Non-blocking: the search still returns the result, but nothing is cached
 - Check Supabase credentials
 - Verify table schema matches transformation in `syncToSupabase()`
 
@@ -229,10 +227,9 @@ Show summary
 - Try sample properties: "Embassy Lake Terraces", "Brigade Gateway", "Sobha Indraprastha"
 - Test both providers: Claude vs Gemini
 - Check cache: Second search should be instant
-- Verify dual storage: Check both filesystem and Supabase
+- Verify storage: check the `society` row in Supabase
 
 ## Repository Etiquette
-- Commit property JSON files to Git (valuable cached data)
 - Keep `.env.local` out of Git (secrets)
 - Test changes locally before committing
 - Follow existing code style (TypeScript, Tailwind utility classes)

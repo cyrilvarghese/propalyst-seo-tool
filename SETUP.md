@@ -27,9 +27,7 @@ This application uses Claude's built-in WebSearch tool for property intelligence
 
 ## 🔐 Login Credentials
 
-Use these demo credentials to access the platform:
-- **Email**: `demo@propalyst.com`
-- **Password**: `password123`
+Every page and API sits behind Supabase login (the same accounts as the main Propalyst app). Only users whose `profiles.role` includes `admin` get in.
 
 ## 🎯 How It Works
 

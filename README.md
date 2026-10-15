@@ -12,9 +12,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and login with:
-- **Email**: `demo@propalyst.com`
-- **Password**: `password123`
+Open [http://localhost:3000](http://localhost:3000) and sign in with a Propalyst Supabase account that has the `admin` role.
 
 ## 📋 Prerequisites
 
