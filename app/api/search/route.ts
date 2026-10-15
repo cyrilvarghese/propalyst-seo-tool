@@ -629,55 +629,16 @@ CRITICAL - YOUR RESPONSE MUST BE:
 Return the complete JSON now.`;
 
         // Call Claude API with unrestricted WebSearch
-        // Using prefilled response technique for consistency (https://docs.claude.com/en/docs/test-and-evaluate/strengthen-guardrails/increase-consistency)
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-                'anthropic-version': '2023-06-01'
-            },
-            body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 4096,
-                tools: [{
-                    type: 'web_search_20250305',
-                    name: 'web_search',
-                    // NO allowed_domains - let Claude search freely
-                    max_uses: 7 // Allow 5-7 searches for comprehensive depth
-                }],
-                messages: [
-                    {
-                        role: 'user',
-                        content: searchPrompt
-                    },
-                    {
-                        role: 'assistant',
-                        content: '{'  // Prefill response to force JSON output without preamble
-                    }
-                ]
-            })
+        const aiResponse = await callClaudeWithWebSearch(searchPrompt, {
+            type: 'web_search_20260209',
+            name: 'web_search',
+            // NO allowed_domains - let Claude search freely
+            max_uses: 7 // Allow 5-7 searches for comprehensive depth
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Claude API error ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        // Extract text content from Claude's response
-        let aiResponse = '';
-        for (const content of data.content || []) {
-            if (content.type === 'text') {
-                aiResponse += content.text;
-            }
-        }
 
         console.log(`[DirectSearch:${requestId}] 📄 Received response (${aiResponse.length} chars)`);
 
-        // Since we prefilled with '{', we need to add it back to complete the JSON
-        let cleanedResponse = '{' + aiResponse.trim();
+        let cleanedResponse = aiResponse.trim();
 
         // Remove markdown code blocks if present
         if (cleanedResponse.includes('```json')) {
@@ -1058,43 +1019,12 @@ Important:
 6. Confidence score should reflect data completeness (80+ = excellent, 60-79 = good, <60 = limited)`;
 
         // Call Claude API with WebSearch tool enabled
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-                'anthropic-version': '2023-06-01'
-            },
-            body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 4096,
-                tools: [{
-                    type: 'web_search_20250305',
-                    name: 'web_search',
-                    allowed_domains: [domain], // Restrict search to this domain
-                    max_uses: 3 // Allow up to 3 searches for thorough extraction
-                }],
-                messages: [{
-                    role: 'user',
-                    content: extractionPrompt
-                }]
-            })
+        const aiResponse = await callClaudeWithWebSearch(extractionPrompt, {
+            type: 'web_search_20260209',
+            name: 'web_search',
+            allowed_domains: [domain], // Restrict search to this domain
+            max_uses: 3 // Allow up to 3 searches for thorough extraction
         });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Claude API error ${response.status}: ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        // Extract text content from Claude's response
-        let aiResponse = '';
-        for (const content of data.content || []) {
-            if (content.type === 'text') {
-                aiResponse += content.text;
-            }
-        }
 
         console.log(`[WebSearch:${requestId}] 📄 Received response (${aiResponse.length} chars)`);
 
@@ -1163,4 +1093,65 @@ export async function GET() {
         { error: 'Method not allowed. Use POST to search for properties.' },
         { status: 405 }
     );
+}
+
+
+/**
+ * Call Claude with the server-side web search tool and return the final text.
+ *
+ * Web search runs on Anthropic's servers. A long search can stop with
+ * stop_reason "pause_turn"; we send the partial turn back so Claude resumes.
+ * Text between tool calls arrives as thinking blocks, so the text blocks are
+ * the final answer only.
+ */
+async function callClaudeWithWebSearch(prompt: string, webSearchTool: Record<string, unknown>): Promise<string> {
+    const messages: Array<{ role: 'user' | 'assistant'; content: unknown }> = [
+        { role: 'user', content: prompt }
+    ];
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+                'anthropic-version': '2023-06-01',
+                // Re-run on a fallback model if a safety classifier declines
+                'anthropic-beta': 'server-side-fallback-2026-07-01'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-5-5',
+                max_tokens: 16000,
+                fallbacks: 'default',
+                tools: [webSearchTool],
+                messages
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Claude API error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.stop_reason === 'pause_turn') {
+            messages.push({ role: 'assistant', content: data.content });
+            continue;
+        }
+
+        if (data.stop_reason === 'refusal') {
+            throw new Error(`Claude declined the request (${data.stop_details?.category ?? 'no category'})`);
+        }
+
+        let text = '';
+        for (const block of data.content || []) {
+            if (block.type === 'text') {
+                text += block.text;
+            }
+        }
+        return text;
+    }
+
+    throw new Error('Claude web search did not finish after 4 continuations');
 }
