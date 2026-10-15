@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PropalystLogo } from './propalyst-logo'
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser'
 
 export function Navigation() {
@@ -29,10 +30,8 @@ export function Navigation() {
         <nav className="bg-white shadow-sm border-b p-4">
             <div className="container mx-auto flex justify-between items-center">
                 <div className="flex items-center gap-6">
-                    <Link href="/" className="text-xl font-bold text-gray-900">
-                        <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                            Propalyst
-                        </span>
+                    <Link href="/" className="block">
+                        <PropalystLogo />
                     </Link>
                     <div className="flex gap-4">
                         <Link
